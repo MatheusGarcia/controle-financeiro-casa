@@ -5,7 +5,7 @@ import { ensureInitialCategories } from "@/lib/categories";
 import { prisma } from "@/lib/prisma";
 import { ensureRecurringExpensesForMonth } from "@/lib/recurring-expenses";
 
-type SearchParams = Promise<{ month?: string; edit?: string }>;
+type SearchParams = Promise<{ month?: string; edit?: string; payer?: string; status?: string; settlement?: string }>;
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +20,18 @@ function currentMonth() {
 
 function parseMonth(value?: string) {
   return /^\d{4}-\d{2}$/.test(value ?? "") ? value! : currentMonth();
+}
+
+function parsePayerFilter(value?: string) {
+  return value === "MATHEUS" || value === "KARINA" ? value : undefined;
+}
+
+function parseStatusFilter(value?: string) {
+  return value === "PAGO" || value === "PENDENTE" ? value : undefined;
+}
+
+function parseSettlementFilter(value?: string) {
+  return value === "DIVIDIDA" || value === "PENDENTE_DIVISAO" ? value : undefined;
 }
 
 function monthBounds(month: string) {
@@ -49,6 +61,9 @@ function sumExpenses(expenses: Array<{ amount: Prisma.Decimal }>) {
 export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const month = parseMonth(params.month);
+  const payerFilter = parsePayerFilter(params.payer);
+  const statusFilter = parseStatusFilter(params.status);
+  const settlementFilter = parseSettlementFilter(params.settlement);
   const { start, end } = monthBounds(month);
   const trendStart = new Date(start.getFullYear(), start.getMonth() - 5, 1, 12);
   const upcomingEnd = new Date(end.getFullYear(), end.getMonth() + 3, 1, 12);
@@ -78,6 +93,16 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   ]);
 
   const editExpense = params.edit ? expenses.find((expense) => expense.id === params.edit) : undefined;
+  const filteredExpenses = expenses.filter((expense) => (
+    (!payerFilter || expense.payer === payerFilter)
+    && (!statusFilter || expense.status === statusFilter)
+    && (!settlementFilter || expense.settlementStatus === settlementFilter)
+  ));
+  const expenseListParams = new URLSearchParams({ month });
+  if (payerFilter) expenseListParams.set("payer", payerFilter);
+  if (statusFilter) expenseListParams.set("status", statusFilter);
+  if (settlementFilter) expenseListParams.set("settlement", settlementFilter);
+  const expenseListUrl = `/?${expenseListParams.toString()}`;
   const shared = expenses.filter((expense) => expense.sharingType === SharingType.COMPARTILHADA);
   const sharedTotal = sumExpenses(shared);
   const pendingSettlement = shared.filter((expense) => expense.settlementStatus === SettlementStatus.PENDENTE_DIVISAO);
@@ -168,19 +193,26 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
             <div className="field"><label htmlFor="settlementStatus">Divisão</label><select id="settlementStatus" name="settlementStatus" defaultValue={editExpense?.settlementStatus ?? "PENDENTE_DIVISAO"}><option value="PENDENTE_DIVISAO">Pendente de dividir</option><option value="DIVIDIDA">Já dividida</option></select></div>
             <div className="field"><label htmlFor="status">Status</label><select id="status" name="status" defaultValue={editExpense?.status ?? "PAGO"}><option value="PAGO">Pago</option><option value="PENDENTE">Pendente</option></select></div>
             <div className="field"><label htmlFor="notes">Observação</label><textarea id="notes" name="notes" defaultValue={editExpense?.notes ?? undefined} placeholder="Opcional" /></div>
-            <div className="actions"><button className="button" type="submit">{editExpense ? "Salvar alterações" : "Adicionar despesa"}</button>{editExpense && <Link className="button secondary" href={`/?month=${month}`}>Cancelar</Link>}</div>
+            <div className="actions"><button className="button" type="submit">{editExpense ? "Salvar alterações" : "Adicionar despesa"}</button>{editExpense && <Link className="button secondary" href={expenseListUrl}>Cancelar</Link>}</div>
           </form>
         </aside>
 
         <section className="card">
           <h2>Despesas de {new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(start)}</h2>
           <p className={`settlement ${Math.abs(matheusBalance) < 0.005 ? "neutral" : ""}`}>{settlement}</p>
-          {expenses.length === 0 ? <p className="empty">Nenhuma despesa registrada neste mês.</p> : <div className="expense-list">
-            {expenses.map((expense) => (
+          <form className="expense-filters" action="/" method="get">
+            <input name="month" type="hidden" value={month} />
+            <div className="field"><label htmlFor="filterPayer">Quem pagou</label><select id="filterPayer" name="payer" defaultValue={payerFilter ?? ""}><option value="">Todos</option><option value="MATHEUS">Matheus</option><option value="KARINA">Karina</option></select></div>
+            <div className="field"><label htmlFor="filterStatus">Status</label><select id="filterStatus" name="status" defaultValue={statusFilter ?? ""}><option value="">Todos</option><option value="PAGO">Pago</option><option value="PENDENTE">Pendente</option></select></div>
+            <div className="field"><label htmlFor="filterSettlement">Divisão</label><select id="filterSettlement" name="settlement" defaultValue={settlementFilter ?? ""}><option value="">Todas</option><option value="PENDENTE_DIVISAO">Pendente de dividir</option><option value="DIVIDIDA">Já dividida</option></select></div>
+            <div className="filter-actions"><button className="button secondary" type="submit">Filtrar</button><Link className="link-button" href={`/?month=${month}`}>Limpar</Link></div>
+          </form>
+          {filteredExpenses.length === 0 ? <p className="empty">Nenhuma despesa encontrada com estes filtros.</p> : <div className="expense-list">
+            {filteredExpenses.map((expense) => (
               <article className="expense" key={expense.id}>
                 <div><p className="expense-description">{expense.description}</p><p className="expense-meta">{dateFormatter.format(expense.occurredOn)} · {expense.category.name} · {formatPerson(expense.payer)} · {expense.sharingType === "COMPARTILHADA" ? "Compartilhada" : "Individual"} · {expense.status === "PAGO" ? "Pago" : "Pendente"}{expense.sharingType === "COMPARTILHADA" ? ` · ${expense.settlementStatus === "DIVIDIDA" ? "Já dividida" : "Pendente de dividir"}` : ""}</p></div>
                 <strong className="expense-amount">{currency.format(decimalValue(expense.amount))}</strong>
-                <div className="expense-actions"><Link className="link-button" href={`/?month=${month}&edit=${expense.id}#expense-form`} scroll={false}>Editar</Link><form action={deleteExpense}><input type="hidden" name="id" value={expense.id} /><input type="hidden" name="month" value={month} /><button className="button danger" type="submit">Excluir</button></form></div>
+                <div className="expense-actions"><Link className="link-button" href={`${expenseListUrl}&edit=${expense.id}#expense-form`} scroll={false}>Editar</Link><form action={deleteExpense}><input type="hidden" name="id" value={expense.id} /><input type="hidden" name="month" value={month} /><button className="button danger" type="submit">Excluir</button></form></div>
               </article>
             ))}
           </div>}

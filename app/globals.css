@@ -46,6 +46,9 @@ textarea { min-height: 74px; resize: vertical; }
 .expense-amount { font-weight: 750; text-align: right; white-space: nowrap; }
 .expense-actions { display: flex; gap: 6px; justify-content: end; }
 .link-button { background: transparent; border: 0; color: #176b87; font-size: .82rem; font-weight: 700; padding: 5px; text-decoration: none; }
+.expense-filters { align-items: end; border-bottom: 1px solid #e9edf3; display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; margin: 18px 0 8px; padding-bottom: 18px; }
+.expense-filters .field { margin: 0; }
+.filter-actions { align-items: center; display: flex; gap: 8px; min-height: 40px; }
 .settlement { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; color: #065f46; margin: 0 0 16px; padding: 12px; }
 .settlement.neutral { background: #f8fafc; border-color: #e2e8f0; color: #475569; }
 .management { border-top: 1px solid #dbe3ee; margin-top: 36px; padding-top: 32px; }
@@ -103,4 +106,4 @@ details[open] summary { margin-bottom: 20px; }
 @media (max-width: 860px) { .management-grid { grid-template-columns: 1fr; } }
 @media (max-width: 860px) { .dashboard-grid, .insights-grid { grid-template-columns: 1fr; } .dashboard-heading { align-items: start; flex-direction: column; } .dashboard-heading .note { text-align: left; } }
 @media (max-width: 860px) { .header { align-items: start; flex-direction: column; } .summary-grid, .content-grid { grid-template-columns: 1fr 1fr; } .content-grid > .card { grid-column: span 2; } }
-@media (max-width: 560px) { .shell { padding: 28px 16px 48px; } .summary-grid, .content-grid, .two-columns { grid-template-columns: 1fr; } .content-grid > .card { grid-column: auto; } .expense { grid-template-columns: 1fr auto; } .expense-actions { grid-column: 1 / -1; justify-content: start; } }
+@media (max-width: 560px) { .shell { padding: 28px 16px 48px; } .summary-grid, .content-grid, .two-columns, .expense-filters { grid-template-columns: 1fr; } .content-grid > .card { grid-column: auto; } .expense { grid-template-columns: 1fr auto; } .expense-actions { grid-column: 1 / -1; justify-content: start; } }
