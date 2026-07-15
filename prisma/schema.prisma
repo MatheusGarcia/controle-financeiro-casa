@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Person {
+  MATHEUS
+  KARINA
+}
+
+enum SharingType {
+  COMPARTILHADA
+  INDIVIDUAL
+}
+
+enum ExpenseStatus {
+  PENDENTE
+  PAGO
+}
+
+enum SettlementStatus {
+  PENDENTE_DIVISAO
+  DIVIDIDA
+}
+
+enum PaymentMethodType {
+  CARTAO
+  CONTA
+  DINHEIRO
+  OUTRO
+}
+
+model Category {
+  id               String            @id @default(cuid())
+  name             String            @unique
+  group            String
+  active           Boolean           @default(true)
+  expenses         Expense[]
+  recurringRules   RecurringRule[]
+  installmentPlans InstallmentPlan[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model PaymentMethod {
+  id               String            @id @default(cuid())
+  name             String
+  type             PaymentMethodType
+  owner            Person?
+  active           Boolean           @default(true)
+  expenses         Expense[]
+  recurringRules   RecurringRule[]
+  installmentPlans InstallmentPlan[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([name, owner])
+}
+
+model Expense {
+  id                String           @id @default(cuid())
+  description       String
+  amount            Decimal          @db.Decimal(12, 2)
+  occurredOn        DateTime         @db.Date
+  payer             Person
+  sharingType       SharingType
+  status            ExpenseStatus    @default(PENDENTE)
+  settlementStatus  SettlementStatus @default(PENDENTE_DIVISAO)
+  notes             String?
+  categoryId        String
+  category          Category         @relation(fields: [categoryId], references: [id])
+  paymentMethodId   String?
+  paymentMethod     PaymentMethod?   @relation(fields: [paymentMethodId], references: [id])
+  recurringRuleId   String?
+  recurringRule     RecurringRule?   @relation(fields: [recurringRuleId], references: [id])
+  installmentPlanId String?
+  installmentPlan   InstallmentPlan? @relation(fields: [installmentPlanId], references: [id])
+  installmentNumber Int?
+  importItemId      String?          @unique
+  importItem        ImportItem?      @relation(fields: [importItemId], references: [id])
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@unique([recurringRuleId, occurredOn])
+  @@unique([installmentPlanId, installmentNumber])
+  @@index([occurredOn])
+  @@index([payer, occurredOn])
+}
+
+model ImportBatch {
+  id             String       @id @default(cuid())
+  sourceFileName String
+  importedAt     DateTime?
+  items          ImportItem[]
+  createdAt      DateTime     @default(now())
+}
+
+model ImportItem {
+  id            String       @id @default(cuid())
+  batchId       String
+  batch         ImportBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  sheetName     String
+  sourceRow     Int
+  description   String
+  amount        Decimal      @db.Decimal(12, 2)
+  occurredOn    DateTime     @db.Date
+  payer         Person?
+  sharingType   SharingType  @default(COMPARTILHADA)
+  categoryName  String
+  needsReview   Boolean      @default(false)
+  importedExpense Expense?
+  createdAt     DateTime     @default(now())
+
+  @@index([batchId])
+}
+
+model RecurringRule {
+  id              String         @id @default(cuid())
+  description     String
+  amount          Decimal        @db.Decimal(12, 2)
+  dueDay          Int
+  payer           Person
+  sharingType     SharingType
+  startsOn        DateTime       @db.Date
+  endsOn          DateTime?      @db.Date
+  active          Boolean        @default(true)
+  categoryId      String
+  category        Category       @relation(fields: [categoryId], references: [id])
+  paymentMethodId String?
+  paymentMethod   PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+  expenses        Expense[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model InstallmentPlan {
+  id                String         @id @default(cuid())
+  description       String
+  installmentAmount Decimal        @db.Decimal(12, 2)
+  totalInstallments Int
+  firstDueOn        DateTime       @db.Date
+  payer             Person
+  sharingType       SharingType
+  status            ExpenseStatus  @default(PENDENTE)
+  categoryId        String
+  category          Category       @relation(fields: [categoryId], references: [id])
+  paymentMethodId   String?
+  paymentMethod     PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+  expenses          Expense[]
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
