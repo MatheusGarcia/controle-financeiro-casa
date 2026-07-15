@@ -89,6 +89,7 @@ model Expense {
   @@unique([installmentPlanId, installmentNumber])
   @@index([occurredOn])
   @@index([payer, occurredOn])
+  @@index([occurredOn, payer, status, settlementStatus])
 }
 
 model ImportBatch {
