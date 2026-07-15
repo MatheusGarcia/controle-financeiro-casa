@@ -1,7 +1,8 @@
 "use server";
 import { Person } from "@prisma/client";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { dashboardCacheTag } from "@/features/dashboard/data";
 import { ensureInitialCategories } from "@/lib/categories";
 import { prisma } from "@/lib/prisma";
 import { parseMonthlyExpenses } from "@/lib/spreadsheet-importer";
@@ -43,6 +44,7 @@ export async function commitImportBatch(formData: FormData) {
     prisma.importBatch.update({ where: { id: batchId }, data: { importedAt: new Date() } }),
   ]);
 
+  updateTag(dashboardCacheTag);
   revalidatePath("/");
   redirect("/?month=2026-01");
 }

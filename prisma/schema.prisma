@@ -90,6 +90,8 @@ model Expense {
   @@index([occurredOn])
   @@index([payer, occurredOn])
   @@index([occurredOn, payer, status, settlementStatus])
+  @@index([categoryId])
+  @@index([paymentMethodId])
 }
 
 model ImportBatch {
@@ -136,6 +138,9 @@ model RecurringRule {
   expenses        Expense[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+
+  @@index([categoryId])
+  @@index([paymentMethodId])
 }
 
 model InstallmentPlan {
@@ -154,4 +159,7 @@ model InstallmentPlan {
   expenses          Expense[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
+
+  @@index([categoryId])
+  @@index([paymentMethodId])
 }

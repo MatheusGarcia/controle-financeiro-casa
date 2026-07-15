@@ -1,4 +1,5 @@
 import { ExpenseStatus, SettlementStatus } from "@prisma/client";
+import { observe } from "@/lib/observability";
 import { prisma } from "@/lib/prisma";
 
 function monthBounds(month: string) {
@@ -22,12 +23,13 @@ export async function ensureRecurringExpensesForMonth(month: string) {
       active: true,
       startsOn: { lt: end },
       OR: [{ endsOn: null }, { endsOn: { gte: start } }],
+      expenses: { none: { occurredOn: { gte: start, lt: end } } },
     },
   });
 
-  if (rules.length === 0) return;
+  if (rules.length === 0) return 0;
 
-  await prisma.expense.createMany({
+  const result = await observe("recurring_expense_generation", () => prisma.expense.createMany({
     data: rules.map((rule) => ({
       description: rule.description,
       amount: rule.amount,
@@ -41,5 +43,7 @@ export async function ensureRecurringExpensesForMonth(month: string) {
       recurringRuleId: rule.id,
     })),
     skipDuplicates: true,
-  });
+  }));
+
+  return result.count;
 }

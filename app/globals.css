@@ -35,6 +35,15 @@ p { line-height: 1.5; }
 .card { background: white; border: 1px solid #e4e9f1; border-radius: 16px; box-shadow: 0 8px 24px rgba(20,33,61,.04); padding: 22px; }
 .metric-label { color: #62748d; display: block; font-size: .86rem; font-weight: 600; margin-bottom: 9px; }
 .metric-value { font-size: 1.42rem; font-weight: 750; }
+.loading-card { display: grid; gap: 13px; min-height: 111px; }
+.skeleton { animation: shimmer 1.4s ease-in-out infinite; background: linear-gradient(90deg, #edf1f6 20%, #f7f9fc 45%, #edf1f6 70%); background-size: 200% 100%; border-radius: 7px; display: block; }
+.skeleton-label { height: 12px; width: 62%; }
+.skeleton-value { height: 26px; width: 45%; }
+.skeleton-title { height: 18px; width: 48%; }
+.skeleton-block { height: 122px; margin-top: 5px; width: 100%; }
+.skeleton-chart { height: 185px; margin-top: 5px; width: 100%; }
+.dashboard-loading { padding-bottom: 34px; }
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 .positive { color: #007c56; }
 .negative { color: #b42318; }
 .field { display: grid; gap: 6px; margin-bottom: 14px; }

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Prisma, SettlementStatus, SharingType } from "@prisma/client";
+import { Suspense } from "react";
+import { Prisma } from "@prisma/client";
 import { createExpense, createInstallmentPlan, createPaymentMethod, createRecurringRule, deleteExpense, updateExpense } from "@/app/actions";
 import { ensureInitialCategories } from "@/lib/categories";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +9,9 @@ import { SideNavigation } from "@/app/components/side-navigation";
 import { SubmitButton } from "@/app/components/submit-button";
 import { ExpenseFiltersForm } from "@/features/expenses/components/expense-filters";
 import { expenseListUrl as buildExpenseListUrl, parseExpenseFilters } from "@/features/expenses/filters";
+import { MonthlyDashboard } from "@/features/dashboard/components/monthly-dashboard";
+import { MonthlyDashboardSkeleton, MonthlySummarySkeleton } from "@/features/dashboard/components/dashboard-skeletons";
+import { MonthlySummary } from "@/features/dashboard/components/monthly-summary";
 
 type SearchParams = Promise<{ month?: string; edit?: string; page?: string; payer?: string; status?: string; settlement?: string }>;
 
@@ -15,8 +19,6 @@ export const dynamic = "force-dynamic";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" });
-const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "short", year: "2-digit" });
-const categoryColors = ["#176b87", "#0f9d79", "#e67e22", "#8e5cc8", "#d05d7b", "#5a6f93", "#c9a227", "#007c56", "#8b5e3c"];
 const expensesPerPage = 20;
 
 function currentMonth() {
@@ -47,85 +49,29 @@ function decimalValue(value: Prisma.Decimal) {
   return value.toNumber();
 }
 
-function sumExpenses(expenses: Array<{ amount: Prisma.Decimal }>) {
-  return expenses.reduce((sum, expense) => sum + decimalValue(expense.amount), 0);
-}
-
 export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const month = parseMonth(params.month);
   const filters = parseExpenseFilters(params);
   const page = Math.max(1, Number(params.page) || 1);
   const { start, end } = monthBounds(month);
-  const trendStart = new Date(start.getFullYear(), start.getMonth() - 5, 1, 12);
-  const upcomingEnd = new Date(end.getFullYear(), end.getMonth() + 3, 1, 12);
 
   await ensureInitialCategories();
   await ensureRecurringExpensesForMonth(month);
   const monthWhere: Prisma.ExpenseWhereInput = { occurredOn: { gte: start, lt: end } };
   const listWhere: Prisma.ExpenseWhereInput = { ...monthWhere, payer: filters.payer, status: filters.status, settlementStatus: filters.settlement };
-  const [categories, paymentMethods, recurringRules, installmentPlans, expenses, filteredExpenses, filteredExpenseCount, trendExpenses, upcomingExpenses] = await Promise.all([
+  const [categories, paymentMethods, recurringRules, installmentPlans, filteredExpenses, filteredExpenseCount, editExpense] = await Promise.all([
     prisma.category.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     prisma.paymentMethod.findMany({ where: { active: true }, orderBy: [{ owner: "asc" }, { name: "asc" }] }),
     prisma.recurringRule.findMany({ where: { active: true }, include: { category: true, paymentMethod: true }, orderBy: { description: "asc" } }),
     prisma.installmentPlan.findMany({ include: { category: true, paymentMethod: true }, orderBy: { firstDueOn: "asc" } }),
-    prisma.expense.findMany({
-      where: monthWhere,
-      include: { category: true },
-      orderBy: [{ occurredOn: "desc" }, { createdAt: "desc" }],
-    }),
     prisma.expense.findMany({ where: listWhere, include: { category: true }, orderBy: [{ occurredOn: "desc" }, { createdAt: "desc" }], skip: (page - 1) * expensesPerPage, take: expensesPerPage }),
     prisma.expense.count({ where: listWhere }),
-    prisma.expense.findMany({
-      where: { occurredOn: { gte: trendStart, lt: end } },
-      select: { amount: true, occurredOn: true },
-    }),
-    prisma.expense.findMany({
-      where: { occurredOn: { gte: end, lt: upcomingEnd }, status: "PENDENTE" },
-      include: { category: true },
-      orderBy: { occurredOn: "asc" },
-      take: 6,
-    }),
+    params.edit ? prisma.expense.findUnique({ where: { id: params.edit } }) : null,
   ]);
 
-  const editExpense = params.edit ? expenses.find((expense) => expense.id === params.edit) : undefined;
   const expenseListUrl = buildExpenseListUrl(month, filters);
   const totalExpensePages = Math.max(1, Math.ceil(filteredExpenseCount / expensesPerPage));
-  const shared = expenses.filter((expense) => expense.sharingType === SharingType.COMPARTILHADA);
-  const sharedTotal = sumExpenses(shared);
-  const pendingSettlement = shared.filter((expense) => expense.settlementStatus === SettlementStatus.PENDENTE_DIVISAO);
-  const matheusPaid = sumExpenses(pendingSettlement.filter((expense) => expense.payer === "MATHEUS"));
-  const karinaPaid = sumExpenses(pendingSettlement.filter((expense) => expense.payer === "KARINA"));
-  const pendingSettlementTotal = sumExpenses(pendingSettlement);
-  const half = pendingSettlementTotal / 2;
-  const matheusBalance = matheusPaid - half;
-  const karinaBalance = karinaPaid - half;
-  const settlement = Math.abs(matheusBalance) < 0.005
-    ? "As despesas compartilhadas estão equilibradas."
-    : matheusBalance > 0
-      ? `Karina deve ${currency.format(matheusBalance)} para Matheus.`
-      : `Matheus deve ${currency.format(karinaBalance)} para Karina.`;
-  const individualTotal = sumExpenses(expenses.filter((expense) => expense.sharingType === SharingType.INDIVIDUAL));
-  const monthTotal = sumExpenses(expenses);
-  const settledTotal = sumExpenses(shared.filter((expense) => expense.settlementStatus === SettlementStatus.DIVIDIDA));
-  const personTotals = ["MATHEUS", "KARINA"].map((person) => ({
-    person: person as "MATHEUS" | "KARINA",
-    value: sumExpenses(expenses.filter((expense) => expense.payer === person)),
-  }));
-  const categoryTotals = Array.from(
-    expenses.reduce((result, expense) => {
-      const previous = result.get(expense.category.name) ?? 0;
-      result.set(expense.category.name, previous + decimalValue(expense.amount));
-      return result;
-    }, new Map<string, number>()),
-  ).sort(([, left], [, right]) => right - left);
-  const maxCategoryTotal = categoryTotals[0]?.[1] ?? 1;
-  const monthlyTrend = Array.from({ length: 6 }, (_, index) => {
-    const date = new Date(start.getFullYear(), start.getMonth() - 5 + index, 1, 12);
-    const value = sumExpenses(trendExpenses.filter((expense) => expense.occurredOn.getFullYear() === date.getFullYear() && expense.occurredOn.getMonth() === date.getMonth()));
-    return { date, value };
-  });
-  const maxTrendValue = Math.max(...monthlyTrend.map((item) => item.value), 1);
 
   return (
     <main className="app-layout">
@@ -143,25 +89,12 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         </form></div>
       </header>
 
-      <section className="grid summary-grid" aria-label="Resumo do mês" id="summary">
-        <article className="card"><span className="metric-label">Total compartilhado</span><strong className="metric-value">{currency.format(sharedTotal)}</strong></article>
-        <article className="card"><span className="metric-label">Acerto pendente (por pessoa)</span><strong className="metric-value">{currency.format(half)}</strong></article>
-        <article className="card"><span className="metric-label">Matheus adiantou (pendente)</span><strong className="metric-value">{currency.format(matheusPaid)}</strong></article>
-        <article className="card"><span className="metric-label">Karina adiantou (pendente)</span><strong className="metric-value">{currency.format(karinaPaid)}</strong></article>
-      </section>
-
-      <section className="dashboard" aria-label="Painel financeiro" id="dashboard">
-        <div className="dashboard-heading"><div><p className="eyebrow">Dashboard</p><h2>Visão de {new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(start)}</h2></div><p className="note">Valores incluem lançamentos pagos e pendentes do mês.</p></div>
-        <div className="grid dashboard-grid">
-          <article className="card dashboard-card"><h3>Fechamento do mês</h3><div className="closing-rows"><span>Total lançado <strong>{currency.format(monthTotal)}</strong></span><span>Compartilhado <strong>{currency.format(sharedTotal)}</strong></span><span>Individual <strong>{currency.format(individualTotal)}</strong></span><span>Já acertado <strong>{currency.format(settledTotal)}</strong></span></div><p className={`settlement ${Math.abs(matheusBalance) < 0.005 ? "neutral" : ""}`}>{settlement}</p></article>
-          <article className="card dashboard-card"><h3>Quem pagou no mês</h3><div className="split-chart">{personTotals.map((item, index) => <div key={item.person}><div className="split-chart-label"><span>{formatPerson(item.person)}</span><strong>{currency.format(item.value)}</strong></div><div className="progress"><span style={{ width: `${monthTotal ? (item.value / monthTotal) * 100 : 0}%`, background: index === 0 ? "#176b87" : "#e67e22" }} /></div></div>)}</div></article>
-          <article className="card dashboard-card"><h3>Próximos compromissos</h3>{upcomingExpenses.length === 0 ? <p className="note">Nenhuma despesa pendente nos próximos três meses.</p> : <div className="upcoming-list">{upcomingExpenses.map((expense) => <div key={expense.id}><span><strong>{expense.description}</strong><small>{dateFormatter.format(expense.occurredOn)} · {expense.category.name}</small></span><strong>{currency.format(decimalValue(expense.amount))}</strong></div>)}</div>}</article>
-        </div>
-        <div className="grid insights-grid">
-          <article className="card"><h3>Gastos por categoria</h3>{categoryTotals.length === 0 ? <p className="note">Registre despesas para ver a distribuição.</p> : <div className="bar-list">{categoryTotals.map(([name, value], index) => <div key={name}><div className="bar-label"><span><i style={{ background: categoryColors[index % categoryColors.length] }} />{name}</span><strong>{currency.format(value)}</strong></div><div className="progress"><span style={{ width: `${(value / maxCategoryTotal) * 100}%`, background: categoryColors[index % categoryColors.length] }} /></div></div>)}</div>}</article>
-          <article className="card"><h3>Últimos seis meses</h3><div className="trend-chart">{monthlyTrend.map((item) => <div key={item.date.toISOString()}><span className="trend-value">{item.value ? currency.format(item.value) : "–"}</span><div className="trend-column"><span style={{ height: `${(item.value / maxTrendValue) * 100}%` }} /></div><small>{monthFormatter.format(item.date)}</small></div>)}</div></article>
-        </div>
-      </section>
+      <Suspense fallback={<MonthlySummarySkeleton />}>
+        <MonthlySummary month={month} />
+      </Suspense>
+      <Suspense fallback={<MonthlyDashboardSkeleton />}>
+        <MonthlyDashboard month={month} />
+      </Suspense>
 
       <section className="grid content-grid">
         <aside className="card" id="expense-form">
@@ -189,7 +122,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
 
         <section className="card" id="expenses">
           <h2>Despesas de {new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(start)}</h2>
-          <p className={`settlement ${Math.abs(matheusBalance) < 0.005 ? "neutral" : ""}`}>{settlement}</p>
+          <p className="note">O resumo e o acerto compartilhado são carregados no dashboard acima.</p>
           <ExpenseFiltersForm filters={filters} month={month} />
           {filteredExpenses.length === 0 ? <p className="empty">Nenhuma despesa encontrada com estes filtros.</p> : <div className="expense-list">
             {filteredExpenses.map((expense) => (

@@ -1,8 +1,9 @@
 "use server";
 
 import { ExpenseStatus, PaymentMethodType, Person, SettlementStatus, SharingType } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
+import { dashboardCacheTag } from "@/features/dashboard/data";
 import { prisma } from "@/lib/prisma";
 
 function monthFromDate(value: string) {
@@ -55,6 +56,7 @@ function optionalDate(formData: FormData, field: string) {
 export async function createExpense(formData: FormData) {
   const data = expenseData(formData);
   await prisma.expense.create({ data });
+  updateTag(dashboardCacheTag);
   revalidatePath("/");
   redirect(`/?month=${monthFromDate(formData.get("occurredOn")!.toString())}`);
 }
@@ -63,6 +65,7 @@ export async function updateExpense(formData: FormData) {
   const id = requiredText(formData, "id");
   const data = expenseData(formData);
   await prisma.expense.update({ where: { id }, data });
+  updateTag(dashboardCacheTag);
   revalidatePath("/");
   redirect(`/?month=${monthFromDate(formData.get("occurredOn")!.toString())}`);
 }
@@ -71,6 +74,7 @@ export async function deleteExpense(formData: FormData) {
   const id = requiredText(formData, "id");
   const month = requiredText(formData, "month");
   await prisma.expense.delete({ where: { id } });
+  updateTag(dashboardCacheTag);
   revalidatePath("/");
   redirect(`/?month=${month}`);
 }
@@ -120,6 +124,7 @@ export async function createRecurringRule(formData: FormData) {
       paymentMethodId: formData.get("recurringPaymentMethodId")?.toString() || null,
     },
   });
+  updateTag(dashboardCacheTag);
   revalidatePath("/");
   redirect(`/?month=${month}`);
 }
@@ -172,6 +177,7 @@ export async function createInstallmentPlan(formData: FormData) {
     }),
   });
 
+  updateTag(dashboardCacheTag);
   revalidatePath("/");
   redirect(`/?month=${month}`);
 }
