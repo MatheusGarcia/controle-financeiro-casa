@@ -149,7 +149,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       </section>
 
       <section className="grid content-grid">
-        <aside className="card">
+        <aside className="card" id="expense-form">
           <h2>{editExpense ? "Editar despesa" : "Nova despesa"}</h2>
           <p className="note">Marque “Já dividida” quando a parte de quem não pagou a conta já tiver sido repassada.</p>
           <form action={editExpense ? updateExpense : createExpense}>
@@ -180,7 +180,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
               <article className="expense" key={expense.id}>
                 <div><p className="expense-description">{expense.description}</p><p className="expense-meta">{dateFormatter.format(expense.occurredOn)} · {expense.category.name} · {formatPerson(expense.payer)} · {expense.sharingType === "COMPARTILHADA" ? "Compartilhada" : "Individual"} · {expense.status === "PAGO" ? "Pago" : "Pendente"}{expense.sharingType === "COMPARTILHADA" ? ` · ${expense.settlementStatus === "DIVIDIDA" ? "Já dividida" : "Pendente de dividir"}` : ""}</p></div>
                 <strong className="expense-amount">{currency.format(decimalValue(expense.amount))}</strong>
-                <div className="expense-actions"><Link className="link-button" href={`/?month=${month}&edit=${expense.id}`}>Editar</Link><form action={deleteExpense}><input type="hidden" name="id" value={expense.id} /><input type="hidden" name="month" value={month} /><button className="button danger" type="submit">Excluir</button></form></div>
+                <div className="expense-actions"><Link className="link-button" href={`/?month=${month}&edit=${expense.id}#expense-form`} scroll={false}>Editar</Link><form action={deleteExpense}><input type="hidden" name="id" value={expense.id} /><input type="hidden" name="month" value={month} /><button className="button danger" type="submit">Excluir</button></form></div>
               </article>
             ))}
           </div>}
