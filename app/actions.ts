@@ -79,6 +79,35 @@ export async function deleteExpense(formData: FormData) {
   redirect(`/?month=${month}`);
 }
 
+export async function bulkUpdateExpenses(input: { ids: string[]; status?: string; settlementStatus?: string }) {
+  const ids = Array.from(new Set(Array.isArray(input.ids) ? input.ids.filter((id) => typeof id === "string" && id.length > 0) : []));
+  const status = input.status as ExpenseStatus | undefined;
+  const settlementStatus = input.settlementStatus as SettlementStatus | undefined;
+
+  if (ids.length === 0) throw new Error("Selecione ao menos uma despesa.");
+  if (ids.length > 20) throw new Error("A edição em massa está limitada às 20 despesas da página atual.");
+  if (status && !Object.values(ExpenseStatus).includes(status)) throw new Error("Status inválido.");
+  if (settlementStatus && !Object.values(SettlementStatus).includes(settlementStatus)) throw new Error("Status de divisão inválido.");
+  if (!status && !settlementStatus) throw new Error("Escolha ao menos um campo para alterar.");
+
+  const result = await prisma.$transaction(async (transaction) => {
+    const existing = await transaction.expense.findMany({ where: { id: { in: ids } }, select: { id: true, sharingType: true } });
+    if (existing.length !== ids.length) throw new Error("Uma ou mais despesas não estão mais disponíveis. Atualize a página e tente novamente.");
+
+    if (status) await transaction.expense.updateMany({ where: { id: { in: ids } }, data: { status } });
+    const sharedIds = existing.filter((expense) => expense.sharingType === SharingType.COMPARTILHADA).map((expense) => expense.id);
+    if (settlementStatus && sharedIds.length > 0) {
+      await transaction.expense.updateMany({ where: { id: { in: sharedIds } }, data: { settlementStatus } });
+    }
+
+    return { updatedCount: existing.length, skippedDivisionCount: settlementStatus ? existing.length - sharedIds.length : 0 };
+  });
+
+  updateTag(dashboardCacheTag);
+  revalidatePath("/");
+  return result;
+}
+
 export async function createPaymentMethod(formData: FormData) {
   const name = requiredText(formData, "methodName");
   const type = requiredText(formData, "methodType");

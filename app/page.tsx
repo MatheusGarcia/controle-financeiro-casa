@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { Prisma } from "@prisma/client";
-import { createExpense, createInstallmentPlan, createPaymentMethod, createRecurringRule, deleteExpense, updateExpense } from "@/app/actions";
+import { createExpense, createInstallmentPlan, createPaymentMethod, createRecurringRule, updateExpense } from "@/app/actions";
 import { ensureInitialCategories } from "@/lib/categories";
 import { prisma } from "@/lib/prisma";
 import { ensureRecurringExpensesForMonth } from "@/lib/recurring-expenses";
 import { SideNavigation } from "@/app/components/side-navigation";
 import { SubmitButton } from "@/app/components/submit-button";
+import { EditAnchorScroller } from "@/app/components/edit-anchor-scroller";
 import { ExpenseFiltersForm } from "@/features/expenses/components/expense-filters";
+import { ExpenseTable } from "@/features/expenses/components/expense-table";
 import { expenseListUrl as buildExpenseListUrl, parseExpenseFilters } from "@/features/expenses/filters";
 import { MonthlyDashboard } from "@/features/dashboard/components/monthly-dashboard";
 import { MonthlyDashboardSkeleton, MonthlySummarySkeleton } from "@/features/dashboard/components/dashboard-skeletons";
@@ -17,8 +19,6 @@ type SearchParams = Promise<{ month?: string; edit?: string; page?: string; paye
 
 export const dynamic = "force-dynamic";
 
-const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" });
 const expensesPerPage = 20;
 
 function currentMonth() {
@@ -98,6 +98,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
 
       <section className="grid content-grid">
         <aside className="card" id="expense-form">
+          {editExpense && <EditAnchorScroller expenseId={editExpense.id} />}
           <h2>{editExpense ? "Editar despesa" : "Nova despesa"}</h2>
           <p className="note">Marque “Já dividida” quando a parte de quem não pagou a conta já tiver sido repassada.</p>
           <form action={editExpense ? updateExpense : createExpense}>
@@ -124,15 +125,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           <h2>Despesas de {new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(start)}</h2>
           <p className="note">O resumo e o acerto compartilhado são carregados no dashboard acima.</p>
           <ExpenseFiltersForm filters={filters} month={month} />
-          {filteredExpenses.length === 0 ? <p className="empty">Nenhuma despesa encontrada com estes filtros.</p> : <div className="expense-list">
-            {filteredExpenses.map((expense) => (
-              <article className="expense" key={expense.id}>
-                <div><p className="expense-description">{expense.description}</p><p className="expense-meta">{dateFormatter.format(expense.occurredOn)} · {expense.category.name} · {formatPerson(expense.payer)} · {expense.sharingType === "COMPARTILHADA" ? "Compartilhada" : "Individual"} · {expense.status === "PAGO" ? "Pago" : "Pendente"}{expense.sharingType === "COMPARTILHADA" ? ` · ${expense.settlementStatus === "DIVIDIDA" ? "Já dividida" : "Pendente de dividir"}` : ""}</p></div>
-                <strong className="expense-amount">{currency.format(decimalValue(expense.amount))}</strong>
-                <div className="expense-actions"><Link className="link-button" href={`${expenseListUrl}&edit=${expense.id}#expense-form`} scroll={false}>Editar</Link><form action={deleteExpense}><input type="hidden" name="id" value={expense.id} /><input type="hidden" name="month" value={month} /><SubmitButton className="button danger" pendingLabel="Excluindo…">Excluir</SubmitButton></form></div>
-              </article>
-            ))}
-          </div>}
+          {filteredExpenses.length === 0 ? <p className="empty">Nenhuma despesa encontrada com estes filtros.</p> : <ExpenseTable key={`${month}:${page}:${filters.payer ?? ""}:${filters.status ?? ""}:${filters.settlement ?? ""}`} expenses={filteredExpenses.map((expense) => ({ id: expense.id, description: expense.description, occurredOn: expense.occurredOn.toISOString(), categoryName: expense.category.name, payer: expense.payer, sharingType: expense.sharingType, status: expense.status, settlementStatus: expense.settlementStatus, amount: decimalValue(expense.amount) }))} expenseListUrl={expenseListUrl} month={month} />}
           {totalExpensePages > 1 && <nav className="pagination" aria-label="Paginação de despesas"><span>Página {page} de {totalExpensePages}</span>{page > 1 && <Link className="button secondary" href={`${expenseListUrl}&page=${page - 1}#expenses`}>Anterior</Link>}{page < totalExpensePages && <Link className="button secondary" href={`${expenseListUrl}&page=${page + 1}#expenses`}>Próxima</Link>}</nav>}
         </section>
       </section>
