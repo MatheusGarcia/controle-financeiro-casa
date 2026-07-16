@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureRecurringExpensesForMonth } from "@/lib/recurring-expenses";
 import { SideNavigation } from "@/app/components/side-navigation";
 import { SubmitButton } from "@/app/components/submit-button";
+import { LogoutButton } from "@/app/components/logout-button";
 import { EditAnchorScroller } from "@/app/components/edit-anchor-scroller";
 import { ExpenseFiltersForm } from "@/features/expenses/components/expense-filters";
 import { ExpenseTable } from "@/features/expenses/components/expense-table";
@@ -14,6 +15,7 @@ import { expenseListUrl as buildExpenseListUrl, parseExpenseFilters } from "@/fe
 import { MonthlyDashboard } from "@/features/dashboard/components/monthly-dashboard";
 import { MonthlyDashboardSkeleton, MonthlySummarySkeleton } from "@/features/dashboard/components/dashboard-skeletons";
 import { MonthlySummary } from "@/features/dashboard/components/monthly-summary";
+import { requireAuthorizedUser } from "@/lib/auth/server";
 
 type SearchParams = Promise<{ month?: string; edit?: string; page?: string; payer?: string; status?: string; settlement?: string }>;
 
@@ -50,6 +52,7 @@ function decimalValue(value: Prisma.Decimal) {
 }
 
 export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
+  await requireAuthorizedUser();
   const params = await searchParams;
   const month = parseMonth(params.month);
   const filters = parseExpenseFilters(params);
@@ -86,7 +89,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           <label htmlFor="month">Mês</label>
           <input id="month" name="month" type="month" defaultValue={month} />
           <button className="button secondary" type="submit">Ver</button>
-        </form></div>
+        </form><LogoutButton /></div>
       </header>
 
       <Suspense fallback={<MonthlySummarySkeleton />}>

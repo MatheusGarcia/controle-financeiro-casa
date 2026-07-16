@@ -3,12 +3,14 @@ import { Person } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath, updateTag } from "next/cache";
 import { dashboardCacheTag } from "@/features/dashboard/data";
+import { requireAuthorizedUser } from "@/lib/auth/server";
 import { ensureInitialCategories } from "@/lib/categories";
 import { prisma } from "@/lib/prisma";
 import { parseMonthlyExpenses } from "@/lib/spreadsheet-importer";
 
-export async function parseImportWorkbook(formData: FormData) { const file = formData.get("workbook"); if (!(file instanceof File) || !file.name.endsWith(".xlsx")) throw new Error("Selecione uma planilha .xlsx."); const items = await parseMonthlyExpenses(await file.arrayBuffer()); if (!items.length) throw new Error("Nenhum lançamento foi reconhecido."); const batch = await prisma.importBatch.create({ data: { sourceFileName: file.name, items: { create: items } } }); redirect(`/import/${batch.id}`); }
+export async function parseImportWorkbook(formData: FormData) { await requireAuthorizedUser(); const file = formData.get("workbook"); if (!(file instanceof File) || !file.name.endsWith(".xlsx")) throw new Error("Selecione uma planilha .xlsx."); const items = await parseMonthlyExpenses(await file.arrayBuffer()); if (!items.length) throw new Error("Nenhum lançamento foi reconhecido."); const batch = await prisma.importBatch.create({ data: { sourceFileName: file.name, items: { create: items } } }); redirect(`/import/${batch.id}`); }
 export async function commitImportBatch(formData: FormData) {
+  await requireAuthorizedUser();
   const batchId = String(formData.get("batchId"));
   await ensureInitialCategories();
 

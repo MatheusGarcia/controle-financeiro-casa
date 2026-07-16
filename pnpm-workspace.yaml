@@ -3,3 +3,14 @@ allowBuilds:
   '@prisma/engines': true
   prisma: true
   sharp: true
+minimumReleaseAgeExclude:
+  - '@supabase/auth-js@2.110.7'
+  - '@supabase/functions-js@2.110.7'
+  - '@supabase/phoenix@0.4.5'
+  - '@supabase/postgrest-js@2.110.7'
+  - '@supabase/realtime-js@2.110.7'
+  - '@supabase/storage-js@2.110.7'
+  - '@supabase/supabase-js@2.110.7'
+overrides:
+  effect: 3.20.0
+  postcss: 8.5.10

@@ -4,7 +4,7 @@ Base técnica do aplicativo compartilhado de Matheus e Karina.
 
 ## Pré-requisitos
 
-- Node.js 20 ou superior
+- Node.js 22 ou superior
 - Docker Desktop (para o PostgreSQL local)
 
 ## Configuração local

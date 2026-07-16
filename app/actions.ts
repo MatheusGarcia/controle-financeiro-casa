@@ -4,6 +4,7 @@ import { ExpenseStatus, PaymentMethodType, Person, SettlementStatus, SharingType
 import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { dashboardCacheTag } from "@/features/dashboard/data";
+import { requireAuthorizedUser } from "@/lib/auth/server";
 import { prisma } from "@/lib/prisma";
 
 function monthFromDate(value: string) {
@@ -54,6 +55,7 @@ function optionalDate(formData: FormData, field: string) {
 }
 
 export async function createExpense(formData: FormData) {
+  await requireAuthorizedUser();
   const data = expenseData(formData);
   await prisma.expense.create({ data });
   updateTag(dashboardCacheTag);
@@ -62,6 +64,7 @@ export async function createExpense(formData: FormData) {
 }
 
 export async function updateExpense(formData: FormData) {
+  await requireAuthorizedUser();
   const id = requiredText(formData, "id");
   const data = expenseData(formData);
   await prisma.expense.update({ where: { id }, data });
@@ -71,6 +74,7 @@ export async function updateExpense(formData: FormData) {
 }
 
 export async function deleteExpense(formData: FormData) {
+  await requireAuthorizedUser();
   const id = requiredText(formData, "id");
   const month = requiredText(formData, "month");
   await prisma.expense.delete({ where: { id } });
@@ -80,6 +84,7 @@ export async function deleteExpense(formData: FormData) {
 }
 
 export async function bulkUpdateExpenses(input: { ids: string[]; status?: string; settlementStatus?: string }) {
+  await requireAuthorizedUser();
   const ids = Array.from(new Set(Array.isArray(input.ids) ? input.ids.filter((id) => typeof id === "string" && id.length > 0) : []));
   const status = input.status as ExpenseStatus | undefined;
   const settlementStatus = input.settlementStatus as SettlementStatus | undefined;
@@ -109,6 +114,7 @@ export async function bulkUpdateExpenses(input: { ids: string[]; status?: string
 }
 
 export async function createPaymentMethod(formData: FormData) {
+  await requireAuthorizedUser();
   const name = requiredText(formData, "methodName");
   const type = requiredText(formData, "methodType");
   const month = requiredText(formData, "month");
@@ -125,6 +131,7 @@ export async function createPaymentMethod(formData: FormData) {
 }
 
 export async function createRecurringRule(formData: FormData) {
+  await requireAuthorizedUser();
   const month = requiredText(formData, "month");
   const description = requiredText(formData, "recurringDescription");
   const amount = Number(formData.get("recurringAmount"));
@@ -159,6 +166,7 @@ export async function createRecurringRule(formData: FormData) {
 }
 
 export async function createInstallmentPlan(formData: FormData) {
+  await requireAuthorizedUser();
   const month = requiredText(formData, "month");
   const description = requiredText(formData, "installmentDescription");
   const installmentAmount = Number(formData.get("installmentAmount"));
