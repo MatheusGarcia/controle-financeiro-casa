@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 const navigationItems = [
   { id: "summary", label: "Resumo do mês" },
   { id: "dashboard", label: "Dashboard" },
-  { id: "expenses", label: "Despesas" },
   { id: "expense-form", label: "Nova despesa" },
+  { id: "expenses", label: "Despesas" },
   { id: "management", label: "Gestão" },
 ] as const;
 
