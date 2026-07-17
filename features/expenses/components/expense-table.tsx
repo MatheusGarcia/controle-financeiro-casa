@@ -15,6 +15,7 @@ type ExpenseRow = {
   sharingType: "COMPARTILHADA" | "INDIVIDUAL";
   status: "PAGO" | "PENDENTE";
   settlementStatus: "DIVIDIDA" | "PENDENTE_DIVISAO";
+  paymentType: "DEBITO_PIX" | "CREDITO" | "NAO_INFORMADO";
   amount: number;
 };
 
@@ -112,13 +113,14 @@ export function ExpenseTable({ expenses, expenseListUrl, month }: { expenses: Ex
     <div className="expense-table-wrapper" aria-busy={isPending} ref={tableWrapperRef}>
       <table className="expense-table">
         <caption className="sr-only">Despesas do mês selecionado</caption>
-        <thead><tr><th scope="col" className="selection-column"><input ref={selectAllRef} type="checkbox" checked={allSelected} disabled={isPending} onChange={toggleAll} aria-label="Selecionar todas as despesas desta página" /></th><th scope="col">Descrição</th><th scope="col">Data</th><th scope="col">Categoria</th><th scope="col">Pagador</th><th scope="col">Natureza</th><th scope="col">Status</th><th scope="col">Divisão</th><th scope="col" className="numeric-column">Valor</th><th scope="col" className="actions-column">Ações</th></tr></thead>
+        <thead><tr><th scope="col" className="selection-column"><input ref={selectAllRef} type="checkbox" checked={allSelected} disabled={isPending} onChange={toggleAll} aria-label="Selecionar todas as despesas desta página" /></th><th scope="col">Descrição</th><th scope="col">Data</th><th scope="col">Categoria</th><th scope="col">Pagamento</th><th scope="col">Pagador</th><th scope="col">Natureza</th><th scope="col">Status</th><th scope="col">Divisão</th><th scope="col" className="numeric-column">Valor</th><th scope="col" className="actions-column">Ações</th></tr></thead>
         <tbody>{expenses.map((expense) => (
           <tr className={selectedIds.has(expense.id) ? "selected" : undefined} key={expense.id}>
             <td className="selection-column"><input type="checkbox" checked={selectedIds.has(expense.id)} disabled={isPending} onChange={() => toggleExpense(expense.id)} aria-label={`Selecionar ${expense.description}`} /></td>
             <td className="expense-description">{expense.description}</td>
             <td className="date-column">{dateFormatter.format(new Date(expense.occurredOn))}</td>
             <td>{expense.categoryName}</td>
+            <td>{expense.paymentType === "CREDITO" ? "Crédito" : expense.paymentType === "DEBITO_PIX" ? "Débito / Pix" : "—"}</td>
             <td>{formatPerson(expense.payer)}</td>
             <td><span className="table-tag">{expense.sharingType === "COMPARTILHADA" ? "Compartilhada" : "Individual"}</span></td>
             <td><span className={`status-badge ${expense.status === "PAGO" ? "success" : "warning"}`}>{expense.status === "PAGO" ? "Pago" : "Pendente"}</span></td>

@@ -1,6 +1,6 @@
 "use server";
 
-import { ExpenseStatus, PaymentMethodType, Person, SettlementStatus, SharingType } from "@prisma/client";
+import { ExpenseStatus, PaymentType, Person, SettlementStatus, SharingType } from "@prisma/client";
 import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { dashboardCacheTag } from "@/features/dashboard/data";
@@ -26,6 +26,7 @@ function expenseData(formData: FormData) {
   const sharingType = requiredText(formData, "sharingType");
   const status = requiredText(formData, "status");
   const settlementStatus = requiredText(formData, "settlementStatus");
+  const paymentType = requiredText(formData, "paymentType");
 
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("O valor deve ser maior que zero.");
@@ -34,13 +35,14 @@ function expenseData(formData: FormData) {
   if (!Object.values(SharingType).includes(sharingType as SharingType)) throw new Error("Natureza inválida.");
   if (!Object.values(ExpenseStatus).includes(status as ExpenseStatus)) throw new Error("Status inválido.");
   if (!Object.values(SettlementStatus).includes(settlementStatus as SettlementStatus)) throw new Error("Status de divisão inválido.");
+  if (paymentType !== PaymentType.DEBITO_PIX && paymentType !== PaymentType.CREDITO) throw new Error("Forma de pagamento inválida.");
 
   return {
     description,
     amount,
     occurredOn: new Date(`${occurredOnValue}T12:00:00`),
     categoryId,
-    paymentMethodId: formData.get("paymentMethodId")?.toString() || null,
+    paymentType: paymentType as PaymentType,
     payer: payer as Person,
     sharingType: sharingType as SharingType,
     status: status as ExpenseStatus,
@@ -57,20 +59,67 @@ function optionalDate(formData: FormData, field: string) {
 export async function createExpense(formData: FormData) {
   await requireAuthorizedUser();
   const data = expenseData(formData);
-  await prisma.expense.create({ data });
+  const occurredOnValue = requiredText(formData, "occurredOn");
+  const totalInstallments = data.paymentType === PaymentType.CREDITO ? Number(formData.get("totalInstallments")) : 1;
+  const firstInstallmentMonth = data.paymentType === PaymentType.CREDITO ? requiredText(formData, "firstInstallmentMonth") : monthFromDate(occurredOnValue);
+
+  if (!Number.isInteger(totalInstallments) || totalInstallments < 1 || totalInstallments > 120) throw new Error("Informe entre 1 e 120 parcelas.");
+  if (!/^\d{4}-\d{2}$/.test(firstInstallmentMonth)) throw new Error("Mês da primeira parcela inválido.");
+
+  if (totalInstallments === 1) {
+    await prisma.expense.create({
+      data: { ...data, occurredOn: data.paymentType === PaymentType.CREDITO ? new Date(`${firstInstallmentMonth}-01T12:00:00`) : data.occurredOn },
+    });
+  } else {
+    const totalCents = Math.round(Number(data.amount) * 100);
+    const baseInstallmentCents = Math.floor(totalCents / totalInstallments);
+    if (baseInstallmentCents < 1) throw new Error("O valor total é insuficiente para o número de parcelas.");
+    const [year, month] = firstInstallmentMonth.split("-").map(Number);
+    const firstDueOn = new Date(year, month - 1, 1, 12);
+
+    await prisma.$transaction(async (transaction) => {
+      const plan = await transaction.installmentPlan.create({
+        data: {
+          description: data.description,
+          installmentAmount: baseInstallmentCents / 100,
+          totalInstallments,
+          firstDueOn,
+          payer: data.payer,
+          sharingType: data.sharingType,
+          status: data.status,
+          categoryId: data.categoryId,
+        },
+      });
+      await transaction.expense.createMany({
+        data: Array.from({ length: totalInstallments }, (_, index) => ({
+          ...data,
+          description: `${data.description} (${index + 1}/${totalInstallments})`,
+          amount: (baseInstallmentCents + (index === totalInstallments - 1 ? totalCents % totalInstallments : 0)) / 100,
+          occurredOn: new Date(year, month - 1 + index, 1, 12),
+          installmentPlanId: plan.id,
+          installmentNumber: index + 1,
+        })),
+      });
+    });
+  }
   updateTag(dashboardCacheTag);
   revalidatePath("/");
-  redirect(`/?month=${monthFromDate(formData.get("occurredOn")!.toString())}`);
+  redirect(`/?month=${firstInstallmentMonth}`);
 }
 
 export async function updateExpense(formData: FormData) {
   await requireAuthorizedUser();
   const id = requiredText(formData, "id");
   const data = expenseData(formData);
+  if (data.paymentType === PaymentType.CREDITO) {
+    const installmentMonth = requiredText(formData, "firstInstallmentMonth");
+    if (!/^\d{4}-\d{2}$/.test(installmentMonth)) throw new Error("Mês da parcela inválido.");
+    data.occurredOn = new Date(`${installmentMonth}-01T12:00:00`);
+  }
   await prisma.expense.update({ where: { id }, data });
   updateTag(dashboardCacheTag);
   revalidatePath("/");
-  redirect(`/?month=${monthFromDate(formData.get("occurredOn")!.toString())}`);
+  redirect(`/?month=${monthFromDate(data.occurredOn.toISOString())}`);
 }
 
 export async function deleteExpense(formData: FormData) {
@@ -113,23 +162,6 @@ export async function bulkUpdateExpenses(input: { ids: string[]; status?: string
   return result;
 }
 
-export async function createPaymentMethod(formData: FormData) {
-  await requireAuthorizedUser();
-  const name = requiredText(formData, "methodName");
-  const type = requiredText(formData, "methodType");
-  const month = requiredText(formData, "month");
-  const ownerValue = formData.get("methodOwner")?.toString() || null;
-
-  if (!Object.values(PaymentMethodType).includes(type as PaymentMethodType)) throw new Error("Tipo de pagamento inválido.");
-  if (ownerValue && !Object.values(Person).includes(ownerValue as Person)) throw new Error("Titular inválido.");
-
-  await prisma.paymentMethod.create({
-    data: { name, type: type as PaymentMethodType, owner: ownerValue as Person | null },
-  });
-  revalidatePath("/");
-  redirect(`/?month=${month}`);
-}
-
 export async function createRecurringRule(formData: FormData) {
   await requireAuthorizedUser();
   const month = requiredText(formData, "month");
@@ -139,6 +171,7 @@ export async function createRecurringRule(formData: FormData) {
   const categoryId = requiredText(formData, "recurringCategoryId");
   const payer = requiredText(formData, "recurringPayer") as Person;
   const sharingType = requiredText(formData, "recurringSharingType") as SharingType;
+  const paymentType = requiredText(formData, "recurringPaymentType") as PaymentType;
   const startsOn = optionalDate(formData, "startsOn");
 
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("O valor deve ser maior que zero.");
@@ -146,6 +179,7 @@ export async function createRecurringRule(formData: FormData) {
   if (!startsOn) throw new Error("A data inicial é obrigatória.");
   if (!Object.values(Person).includes(payer)) throw new Error("Pagador inválido.");
   if (!Object.values(SharingType).includes(sharingType)) throw new Error("Natureza inválida.");
+  if (paymentType !== PaymentType.DEBITO_PIX && paymentType !== PaymentType.CREDITO) throw new Error("Forma de pagamento inválida.");
 
   await prisma.recurringRule.create({
     data: {
@@ -154,6 +188,7 @@ export async function createRecurringRule(formData: FormData) {
       dueDay,
       payer,
       sharingType,
+      paymentType,
       startsOn,
       endsOn: optionalDate(formData, "endsOn"),
       categoryId,

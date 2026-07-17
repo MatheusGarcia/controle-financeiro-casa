@@ -34,6 +34,12 @@ enum PaymentMethodType {
   OUTRO
 }
 
+enum PaymentType {
+  DEBITO_PIX
+  CREDITO
+  NAO_INFORMADO
+}
+
 model Category {
   id               String            @id @default(cuid())
   name             String            @unique
@@ -71,6 +77,7 @@ model Expense {
   status            ExpenseStatus    @default(PENDENTE)
   settlementStatus  SettlementStatus @default(PENDENTE_DIVISAO)
   notes             String?
+  paymentType       PaymentType      @default(NAO_INFORMADO)
   categoryId        String
   category          Category         @relation(fields: [categoryId], references: [id])
   paymentMethodId   String?
@@ -103,20 +110,20 @@ model ImportBatch {
 }
 
 model ImportItem {
-  id            String       @id @default(cuid())
-  batchId       String
-  batch         ImportBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  sheetName     String
-  sourceRow     Int
-  description   String
-  amount        Decimal      @db.Decimal(12, 2)
-  occurredOn    DateTime     @db.Date
-  payer         Person?
-  sharingType   SharingType  @default(COMPARTILHADA)
-  categoryName  String
-  needsReview   Boolean      @default(false)
+  id              String      @id @default(cuid())
+  batchId         String
+  batch           ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  sheetName       String
+  sourceRow       Int
+  description     String
+  amount          Decimal     @db.Decimal(12, 2)
+  occurredOn      DateTime    @db.Date
+  payer           Person?
+  sharingType     SharingType @default(COMPARTILHADA)
+  categoryName    String
+  needsReview     Boolean     @default(false)
   importedExpense Expense?
-  createdAt     DateTime     @default(now())
+  createdAt       DateTime    @default(now())
 
   @@index([batchId])
 }
@@ -128,6 +135,7 @@ model RecurringRule {
   dueDay          Int
   payer           Person
   sharingType     SharingType
+  paymentType     PaymentType    @default(NAO_INFORMADO)
   startsOn        DateTime       @db.Date
   endsOn          DateTime?      @db.Date
   active          Boolean        @default(true)

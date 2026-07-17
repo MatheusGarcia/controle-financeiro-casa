@@ -38,6 +38,7 @@ export async function ensureRecurringExpensesForMonth(month: string) {
       sharingType: rule.sharingType,
       status: ExpenseStatus.PENDENTE,
       settlementStatus: SettlementStatus.PENDENTE_DIVISAO,
+      paymentType: rule.paymentType,
       categoryId: rule.categoryId,
       paymentMethodId: rule.paymentMethodId,
       recurringRuleId: rule.id,
