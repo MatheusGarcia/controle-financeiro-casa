@@ -36,6 +36,7 @@ export function ExpenseTable({ expenses, expenseListUrl, month }: { expenses: Ex
   const [isConfirming, setIsConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const mobileSelectAllRef = useRef<HTMLInputElement>(null);
   const tableWrapperRef = useRef<HTMLDivElement>(null);
   const preservedTableTopRef = useRef<number | null>(null);
   const router = useRouter();
@@ -44,6 +45,7 @@ export function ExpenseTable({ expenses, expenseListUrl, month }: { expenses: Ex
 
   useEffect(() => {
     if (selectAllRef.current) selectAllRef.current.indeterminate = selectedIds.size > 0 && !allSelected;
+    if (mobileSelectAllRef.current) mobileSelectAllRef.current.indeterminate = selectedIds.size > 0 && !allSelected;
   }, [allSelected, selectedIds.size]);
 
   useEffect(() => {
@@ -112,6 +114,7 @@ export function ExpenseTable({ expenses, expenseListUrl, month }: { expenses: Ex
       {isConfirming && <div className="bulk-confirmation" role="alert"><p><strong>Confirmar atualização?</strong> Serão alteradas {selectedIds.size} {selectedIds.size === 1 ? "despesa" : "despesas"}.{bulkStatus ? ` Status: ${bulkStatus === "PAGO" ? "Pago" : "Pendente"}.` : ""}{bulkSettlementStatus ? ` Divisão: ${bulkSettlementStatus === "DIVIDIDA" ? "Já dividida" : "Pendente de dividir"}.` : ""}</p><div className="bulk-confirmation-actions"><button className="button" type="button" autoFocus onClick={applyBulkUpdate}>Confirmar</button><button className="button secondary" type="button" onClick={() => setIsConfirming(false)}>Voltar</button></div></div>}
     </div>}
     {feedback && <p className={`bulk-feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>{feedback.message}</p>}
+    <label className="mobile-select-all"><input ref={mobileSelectAllRef} type="checkbox" checked={allSelected} disabled={isPending} onChange={toggleAll} />Selecionar todas as despesas</label>
     <div className="expense-table-wrapper" aria-busy={isPending} ref={tableWrapperRef}>
       <table className="expense-table">
         <caption className="sr-only">Despesas do mês selecionado</caption>
@@ -120,15 +123,15 @@ export function ExpenseTable({ expenses, expenseListUrl, month }: { expenses: Ex
           <tr className={selectedIds.has(expense.id) ? "selected" : undefined} key={expense.id}>
             <td className="selection-column"><input type="checkbox" checked={selectedIds.has(expense.id)} disabled={isPending} onChange={() => toggleExpense(expense.id)} aria-label={`Selecionar ${expense.description}`} /></td>
             <td className="expense-description">{expense.description}{expense.installmentNumber && expense.totalInstallments ? <small className="expense-installment">Parcela {expense.installmentNumber} de {expense.totalInstallments}</small> : null}</td>
-            <td className="date-column">{dateFormatter.format(new Date(expense.occurredOn))}</td>
-            <td>{expense.categoryName}</td>
-            <td>{expense.paymentType === "CREDITO" ? "Crédito" : expense.paymentType === "DEBITO_PIX" ? "Débito / Pix" : "—"}</td>
-            <td>{formatPerson(expense.payer)}</td>
-            <td><span className="table-tag">{expense.sharingType === "COMPARTILHADA" ? "Compartilhada" : "Individual"}</span></td>
-            <td><span className={`status-badge ${expense.status === "PAGO" ? "success" : "warning"}`}>{expense.status === "PAGO" ? "Pago" : "Pendente"}</span></td>
-            <td>{expense.sharingType === "COMPARTILHADA" ? <span className={`status-badge ${expense.settlementStatus === "DIVIDIDA" ? "success" : "warning"}`}>{expense.settlementStatus === "DIVIDIDA" ? "Já dividida" : "Pendente"}</span> : <span className="not-applicable">—</span>}</td>
-            <td className="expense-amount">{currency.format(expense.amount)}</td>
-            <td><div className="expense-actions"><Link aria-disabled={isPending} className="link-button" href={`${expenseListUrl}&edit=${expense.id}#expense-form`} onClick={(event) => { if (isPending) event.preventDefault(); }}>Editar</Link><DeleteExpenseControl description={expense.description} expenseId={expense.id} installmentNumber={expense.installmentNumber} month={month} totalInstallments={expense.totalInstallments} /></div></td>
+            <td className="date-column" data-label="Competência">{dateFormatter.format(new Date(expense.occurredOn))}</td>
+            <td data-label="Categoria">{expense.categoryName}</td>
+            <td data-label="Pagamento">{expense.paymentType === "CREDITO" ? "Crédito" : expense.paymentType === "DEBITO_PIX" ? "Débito / Pix" : "—"}</td>
+            <td data-label="Pagador">{formatPerson(expense.payer)}</td>
+            <td data-label="Natureza"><span className="table-tag">{expense.sharingType === "COMPARTILHADA" ? "Compartilhada" : "Individual"}</span></td>
+            <td data-label="Status"><span className={`status-badge ${expense.status === "PAGO" ? "success" : "warning"}`}>{expense.status === "PAGO" ? "Pago" : "Pendente"}</span></td>
+            <td data-label="Divisão">{expense.sharingType === "COMPARTILHADA" ? <span className={`status-badge ${expense.settlementStatus === "DIVIDIDA" ? "success" : "warning"}`}>{expense.settlementStatus === "DIVIDIDA" ? "Já dividida" : "Pendente"}</span> : <span className="not-applicable">—</span>}</td>
+            <td className="expense-amount" data-label="Valor">{currency.format(expense.amount)}</td>
+            <td className="expense-actions-cell"><div className="expense-actions"><Link aria-disabled={isPending} className="link-button" href={`${expenseListUrl}&edit=${expense.id}#expense-form`} onClick={(event) => { if (isPending) event.preventDefault(); }}>Editar</Link><DeleteExpenseControl description={expense.description} expenseId={expense.id} installmentNumber={expense.installmentNumber} month={month} totalInstallments={expense.totalInstallments} /></div></td>
           </tr>
         ))}</tbody>
       </table>

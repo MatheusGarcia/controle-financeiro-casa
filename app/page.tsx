@@ -11,6 +11,7 @@ import { LogoutButton } from "@/app/components/logout-button";
 import { EditAnchorScroller } from "@/app/components/edit-anchor-scroller";
 import { PaymentFields } from "@/app/components/payment-fields";
 import { ExpenseFiltersForm } from "@/features/expenses/components/expense-filters";
+import { SharingFields } from "@/features/expenses/components/sharing-fields";
 import { ExpenseTable } from "@/features/expenses/components/expense-table";
 import { expenseListUrl as buildExpenseListUrl, parseExpenseFilters } from "@/features/expenses/filters";
 import { MonthlyDashboard } from "@/features/dashboard/components/monthly-dashboard";
@@ -98,7 +99,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         <aside className="card" id="expense-form">
           {editExpense && <EditAnchorScroller expenseId={editExpense.id} />}
           <h2>{editExpense ? "Editar despesa" : "Nova despesa"}</h2>
-          <p className="note">Marque “Já dividida” quando a parte de quem não pagou a conta já tiver sido repassada.</p>
+          <p className="note">Informe os dados da compra; os campos se ajustam à forma de pagamento e à natureza escolhidas.</p>
           <form action={editExpense ? updateExpense : createExpense} key={editExpense?.id ?? "new-expense"}>
             {editExpense && <input type="hidden" name="id" value={editExpense.id} />}
             {editExpense?.installmentPlan && <fieldset className="mutation-scope">
@@ -114,11 +115,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
             </div>
             <div className="field"><label htmlFor="categoryId">Categoria</label><select id="categoryId" name="categoryId" required defaultValue={editExpense?.categoryId}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
             <PaymentFields defaultPaymentType={editExpense?.paymentType} defaultInstallments={editExpense?.installmentPlan?.totalInstallments} defaultMonth={editExpense ? editExpense.occurredOn.toISOString().slice(0, 7) : month} editing={Boolean(editExpense)} installmentEditing={Boolean(editExpense?.installmentPlan)} />
-            <div className="two-columns">
-              <div className="field"><label htmlFor="payer">Quem pagou</label><select id="payer" name="payer" defaultValue={editExpense?.payer ?? "MATHEUS"}><option value="MATHEUS">Matheus</option><option value="KARINA">Karina</option></select></div>
-              <div className="field"><label htmlFor="sharingType">Natureza</label><select id="sharingType" name="sharingType" defaultValue={editExpense?.sharingType ?? "COMPARTILHADA"}><option value="COMPARTILHADA">Compartilhada</option><option value="INDIVIDUAL">Individual</option></select></div>
-            </div>
-            <div className="field"><label htmlFor="settlementStatus">Divisão</label><select id="settlementStatus" name="settlementStatus" defaultValue={editExpense?.settlementStatus ?? "PENDENTE_DIVISAO"}><option value="PENDENTE_DIVISAO">Pendente de dividir</option><option value="DIVIDIDA">Já dividida</option></select></div>
+            <SharingFields defaultPayer={editExpense?.payer} defaultSettlementStatus={editExpense?.settlementStatus} defaultSharingType={editExpense?.sharingType} />
             <div className="field"><label htmlFor="status">Status</label><select id="status" name="status" defaultValue={editExpense?.status ?? "PAGO"}><option value="PAGO">Pago</option><option value="PENDENTE">Pendente</option></select></div>
             <div className="field"><label htmlFor="notes">Observação</label><textarea id="notes" name="notes" defaultValue={editExpense?.notes ?? undefined} placeholder="Opcional" /></div>
             <div className="actions"><SubmitButton className="button" pendingLabel={editExpense ? "Salvando alterações…" : "Adicionando despesa…"}>{editExpense ? "Salvar alterações" : "Adicionar despesa"}</SubmitButton>{editExpense && <Link className="button secondary" href={expenseListUrl}>Cancelar</Link>}</div>
