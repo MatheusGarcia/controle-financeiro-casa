@@ -9,10 +9,11 @@ type Props = {
   expenseId: string;
   installmentNumber: number | null;
   month: string;
+  returnTo: string;
   totalInstallments: number | null;
 };
 
-export function DeleteExpenseControl({ description, expenseId, installmentNumber, month, totalInstallments }: Props) {
+export function DeleteExpenseControl({ description, expenseId, installmentNumber, month, returnTo, totalInstallments }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const isInstallment = Boolean(installmentNumber && totalInstallments);
 
@@ -27,12 +28,14 @@ export function DeleteExpenseControl({ description, expenseId, installmentNumber
             <form action={deleteExpense}>
               <input type="hidden" name="id" value={expenseId} />
               <input type="hidden" name="month" value={month} />
+              <input type="hidden" name="returnTo" value={returnTo} />
               <input type="hidden" name="mutationScope" value="CURRENT" />
               <SubmitButton className="button danger" pendingLabel="Excluindo parcela…">Somente esta parcela</SubmitButton>
             </form>
             <form action={deleteExpense}>
               <input type="hidden" name="id" value={expenseId} />
               <input type="hidden" name="month" value={month} />
+              <input type="hidden" name="returnTo" value={returnTo} />
               <input type="hidden" name="mutationScope" value="INSTALLMENT_PLAN" />
               <SubmitButton className="button danger danger-filled" pendingLabel="Excluindo parcelamento…">Todas as parcelas</SubmitButton>
             </form>
@@ -42,6 +45,7 @@ export function DeleteExpenseControl({ description, expenseId, installmentNumber
           <form action={deleteExpense} className="confirmation-options">
             <input type="hidden" name="id" value={expenseId} />
             <input type="hidden" name="month" value={month} />
+            <input type="hidden" name="returnTo" value={returnTo} />
             <input type="hidden" name="mutationScope" value="CURRENT" />
             <SubmitButton className="button danger danger-filled" pendingLabel="Excluindo…">Confirmar exclusão</SubmitButton>
           </form>

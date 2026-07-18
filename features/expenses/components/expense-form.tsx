@@ -51,12 +51,24 @@ export function ExpenseForm({ categories, expense, expenseListUrl, month }: Prop
     target?.focus();
   }, [state]);
 
+  useEffect(() => {
+    if (expense) return;
+    const focusDescription = () => {
+      if (window.location.hash !== "#expense-form") return;
+      requestAnimationFrame(() => formRef.current?.querySelector<HTMLInputElement>('[name="description"]')?.focus({ preventScroll: true }));
+    };
+    focusDescription();
+    window.addEventListener("hashchange", focusDescription);
+    return () => window.removeEventListener("hashchange", focusDescription);
+  }, [expense]);
+
   const describedBy = (field: ExpenseFormField) => state.fieldErrors[field] ? `error-${field}` : undefined;
   const invalid = (field: ExpenseFormField) => Boolean(state.fieldErrors[field]);
   const savedValue = <T extends string>(field: string, fallback: T) => (state.values?.[field] as T | undefined) ?? fallback;
   const paymentType = savedValue("paymentType", expense?.paymentType ?? "DEBITO_PIX");
   const sharingType = savedValue("sharingType", expense?.sharingType ?? "COMPARTILHADA");
   const mutationScope = savedValue<"CURRENT" | "INSTALLMENT_PLAN">("mutationScope", "CURRENT");
+  const secondaryHasError = (["payer", "sharingType", "settlementStatus", "status"] as ExpenseFormField[]).some((field) => Boolean(state.fieldErrors[field]));
 
   return <form action={formAction} key={state.revision} noValidate ref={formRef}>
     {expense && <input type="hidden" name="id" value={expense.id} />}
@@ -69,6 +81,7 @@ export function ExpenseForm({ categories, expense, expenseListUrl, month }: Prop
       <small>Ao escolher todas, o valor informado será aplicado a cada parcela e o mês selecionado continuará sendo o desta parcela.</small>
     </fieldset>}
     {state.status === "error" && <div className="form-feedback error" role="alert"><strong>Não foi possível salvar.</strong><span>{state.message}</span>{state.conflict && <button className="inline-action" type="button" onClick={() => router.refresh()}>Recarregar dados atuais</button>}</div>}
+    <p className="form-section-label">Compra e pagamento</p>
     <div className="field">
       <label htmlFor="description">Descrição</label>
       <input aria-describedby={describedBy("description")} aria-invalid={invalid("description")} id="description" name="description" required defaultValue={savedValue("description", expense?.description ?? "")} placeholder="Ex.: Aluguel" />
@@ -94,15 +107,20 @@ export function ExpenseForm({ categories, expense, expenseListUrl, month }: Prop
       <FieldError field="categoryId" message={state.fieldErrors.categoryId} />
     </div>
     <PaymentFields defaultPaymentType={paymentType} defaultInstallments={Number(savedValue("totalInstallments", String(expense?.totalInstallments ?? 1)))} defaultMonth={savedValue("firstInstallmentMonth", expense?.occurredMonth ?? month)} editing={Boolean(expense)} fieldErrors={state.fieldErrors} installmentEditing={Boolean(expense?.totalInstallments)} />
-    <SharingFields defaultPayer={savedValue("payer", expense?.payer ?? "MATHEUS")} defaultSettlementStatus={savedValue("settlementStatus", expense?.settlementStatus ?? "PENDENTE_DIVISAO")} defaultSharingType={sharingType} fieldErrors={state.fieldErrors} />
-    <div className="field">
-      <label htmlFor="status">Status</label>
-      <select aria-describedby={describedBy("status")} aria-invalid={invalid("status")} id="status" name="status" defaultValue={savedValue("status", expense?.status ?? "PAGO")}>
-        <option value="PAGO">Pago</option><option value="PENDENTE">Pendente</option>
-      </select>
-      <FieldError field="status" message={state.fieldErrors.status} />
-    </div>
-    <div className="field"><label htmlFor="notes">Observação</label><textarea id="notes" name="notes" defaultValue={savedValue("notes", expense?.notes ?? "")} placeholder="Opcional" /></div>
+    <details className="expense-more-details" open={expense || secondaryHasError ? true : undefined}>
+      <summary>Mais detalhes <span>Divisão, status e observação</span></summary>
+      <div className="expense-more-details-content">
+        <SharingFields defaultPayer={savedValue("payer", expense?.payer ?? "MATHEUS")} defaultSettlementStatus={savedValue("settlementStatus", expense?.settlementStatus ?? "PENDENTE_DIVISAO")} defaultSharingType={sharingType} fieldErrors={state.fieldErrors} />
+        <div className="field">
+          <label htmlFor="status">Status</label>
+          <select aria-describedby={describedBy("status")} aria-invalid={invalid("status")} id="status" name="status" defaultValue={savedValue("status", expense?.status ?? "PAGO")}>
+            <option value="PAGO">Pago</option><option value="PENDENTE">Pendente</option>
+          </select>
+          <FieldError field="status" message={state.fieldErrors.status} />
+        </div>
+        <div className="field"><label htmlFor="notes">Observação</label><textarea id="notes" name="notes" defaultValue={savedValue("notes", expense?.notes ?? "")} placeholder="Opcional" /></div>
+      </div>
+    </details>
     <div className="actions"><SubmitButton className="button" pendingLabel={expense ? "Salvando alterações…" : "Adicionando despesa…"}>{expense ? "Salvar alterações" : "Adicionar despesa"}</SubmitButton>{expense && <Link className="button secondary" href={expenseListUrl}>Cancelar</Link>}</div>
   </form>;
 }

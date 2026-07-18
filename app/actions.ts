@@ -65,11 +65,12 @@ function expenseActionError(error: unknown, formData: FormData, previousState: E
   };
 }
 
-function pathWithNotice(path: string, notice: string) {
+function pathWithNotice(path: string, notice: string, extra?: Record<string, string>) {
   const url = new URL(path, "http://local");
   url.searchParams.delete("edit");
   url.searchParams.set("notice", notice);
-  return `${url.pathname}?${url.searchParams.toString()}`;
+  for (const [key, value] of Object.entries(extra ?? {})) url.searchParams.set(key, value);
+  return `${url.pathname}?${url.searchParams.toString()}${url.hash}`;
 }
 
 function safeReturnPath(formData: FormData) {
@@ -130,8 +131,8 @@ export async function deleteExpense(formData: FormData) {
       notice = "delete-error";
     }
   }
-  const undo = deletionId ? `&undo=${encodeURIComponent(deletionId)}` : "";
-  redirect(`/?month=${month}&notice=${notice}${undo}`);
+  const returnTo = safeReturnPath(formData) ?? `/?month=${month}`;
+  redirect(pathWithNotice(returnTo, notice, deletionId ? { undo: deletionId } : undefined));
 }
 
 export async function undoDeleteExpense(formData: FormData) {
@@ -153,7 +154,8 @@ export async function undoDeleteExpense(formData: FormData) {
     }
   }
 
-  redirect(`/?month=${month}&notice=${notice}`);
+  const returnTo = safeReturnPath(formData) ?? `/?month=${month}`;
+  redirect(pathWithNotice(returnTo, notice));
 }
 
 export async function bulkUpdateExpenses(input: { ids: string[]; status?: string; settlementStatus?: string }) {

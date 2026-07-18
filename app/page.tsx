@@ -12,7 +12,7 @@ import { EditAnchorScroller } from "@/app/components/edit-anchor-scroller";
 import { ExpenseForm } from "@/features/expenses/components/expense-form";
 import { ExpenseFiltersForm } from "@/features/expenses/components/expense-filters";
 import { ExpenseTable } from "@/features/expenses/components/expense-table";
-import { expenseListUrl as buildExpenseListUrl, parseExpenseFilters } from "@/features/expenses/filters";
+import { expenseListUrl as buildExpenseListUrl, hasExpenseFilters, parseExpenseFilters } from "@/features/expenses/filters";
 import { MonthlyDashboard } from "@/features/dashboard/components/monthly-dashboard";
 import { MonthlyDashboardSkeleton, MonthlySummarySkeleton } from "@/features/dashboard/components/dashboard-skeletons";
 import { MonthlySummary } from "@/features/dashboard/components/monthly-summary";
@@ -20,7 +20,7 @@ import { RecurringRuleManager } from "@/features/recurring/components/recurring-
 import { nextRecurringOccurrence, recurringRuleStatus } from "@/features/recurring/domain/recurring-rule";
 import { requireAuthorizedUser } from "@/lib/auth/server";
 
-type SearchParams = Promise<{ month?: string; edit?: string; notice?: string; page?: string; payer?: string; status?: string; settlement?: string; undo?: string }>;
+type SearchParams = Promise<{ category?: string; edit?: string; month?: string; notice?: string; page?: string; payer?: string; payment?: string; q?: string; settlement?: string; status?: string; undo?: string }>;
 
 export const dynamic = "force-dynamic";
 
@@ -79,16 +79,26 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   await ensureInitialCategories();
   await ensureRecurringExpensesForMonth(month);
   const monthWhere: Prisma.ExpenseWhereInput = { deletedAt: null, occurredOn: { gte: start, lt: end } };
-  const listWhere: Prisma.ExpenseWhereInput = { ...monthWhere, payer: filters.payer, status: filters.status, settlementStatus: filters.settlement };
-  const [categories, recurringRules, filteredExpenses, filteredExpenseCount, editExpense] = await Promise.all([
+  const listWhere: Prisma.ExpenseWhereInput = {
+    ...monthWhere,
+    categoryId: filters.categoryId,
+    description: filters.query ? { contains: filters.query, mode: "insensitive" } : undefined,
+    payer: filters.payer,
+    paymentType: filters.paymentType,
+    settlementStatus: filters.settlement,
+    status: filters.status,
+  };
+  const [categories, recurringRules, filteredExpenses, filteredExpenseCount, monthExpenseCount, editExpense] = await Promise.all([
     prisma.category.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     prisma.recurringRule.findMany({ include: { category: true, expenses: { where: { occurredOn: { gte: start } }, select: { deletedAt: true, occurredOn: true }, orderBy: { occurredOn: "asc" } } }, orderBy: { description: "asc" } }),
     prisma.expense.findMany({ where: listWhere, include: { category: true, installmentPlan: { select: { totalInstallments: true } } }, orderBy: [{ occurredOn: "desc" }, { createdAt: "desc" }], skip: (page - 1) * expensesPerPage, take: expensesPerPage }),
     prisma.expense.count({ where: listWhere }),
+    prisma.expense.count({ where: monthWhere }),
     params.edit ? prisma.expense.findFirst({ where: { deletedAt: null, id: params.edit }, include: { installmentPlan: { select: { totalInstallments: true } } } }) : null,
   ]);
 
-  const expenseListUrl = buildExpenseListUrl(month, filters);
+  const expenseListUrl = buildExpenseListUrl(month, filters, page);
+  const expenseReturnUrl = `${expenseListUrl}#expenses`;
   const totalExpensePages = Math.max(1, Math.ceil(filteredExpenseCount / expensesPerPage));
   const noticeMessage = params.notice ? noticeMessages[params.notice] : undefined;
   const errorNotice = params.notice === "delete-error" || params.notice === "delete-missing" || params.notice === "restore-error" || params.notice === "recurring-error";
@@ -116,6 +126,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           {undoAvailable && <form action={undoDeleteExpense}>
             <input type="hidden" name="deletionId" value={undoAvailable} />
             <input type="hidden" name="month" value={month} />
+            <input type="hidden" name="returnTo" value={expenseReturnUrl} />
             <SubmitButton className="inline-action" pendingLabel="Restaurando…">Desfazer</SubmitButton>
           </form>}
         </div>
@@ -142,7 +153,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
               sharingType: editExpense.sharingType, status: editExpense.status, totalInstallments: editExpense.installmentPlan?.totalInstallments ?? null,
               updatedAt: editExpense.updatedAt.toISOString(),
             } : undefined}
-            expenseListUrl={expenseListUrl}
+            expenseListUrl={expenseReturnUrl}
             key={editExpense ? `${editExpense.id}-${editExpense.updatedAt.toISOString()}` : "new-expense"}
             month={month}
           />
@@ -151,9 +162,9 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         <section className="card" id="expenses">
           <h2>Despesas de {new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(start)}</h2>
           <p className="note">O resumo e o acerto compartilhado são carregados no dashboard acima.</p>
-          <ExpenseFiltersForm filters={filters} month={month} />
-          {filteredExpenses.length === 0 ? <p className="empty">Nenhuma despesa encontrada com estes filtros.</p> : <ExpenseTable key={`${month}:${page}:${filters.payer ?? ""}:${filters.status ?? ""}:${filters.settlement ?? ""}`} expenses={filteredExpenses.map((expense) => ({ id: expense.id, description: expense.description, occurredOn: expense.occurredOn.toISOString(), categoryName: expense.category.name, payer: expense.payer, sharingType: expense.sharingType, status: expense.status, settlementStatus: expense.settlementStatus, paymentType: expense.paymentType, installmentNumber: expense.installmentNumber, totalInstallments: expense.installmentPlan?.totalInstallments ?? null, amount: decimalValue(expense.amount) }))} expenseListUrl={expenseListUrl} month={month} />}
-          {totalExpensePages > 1 && <nav className="pagination" aria-label="Paginação de despesas"><span>Página {page} de {totalExpensePages}</span>{page > 1 && <Link className="button secondary" href={`${expenseListUrl}&page=${page - 1}#expenses`}>Anterior</Link>}{page < totalExpensePages && <Link className="button secondary" href={`${expenseListUrl}&page=${page + 1}#expenses`}>Próxima</Link>}</nav>}
+          <ExpenseFiltersForm categories={categories.map(({ id, name }) => ({ id, name }))} filters={filters} month={month} resultCount={filteredExpenseCount} />
+          {filteredExpenses.length === 0 ? monthExpenseCount === 0 ? <div className="empty-state"><h3>Nenhuma despesa neste mês</h3><p>Adicione a primeira despesa para começar a acompanhar os totais e o acerto da casa.</p><Link className="button" href="#expense-form">Adicionar primeira despesa</Link></div> : hasExpenseFilters(filters) ? <div className="empty-state"><h3>Nenhum resultado encontrado</h3><p>As despesas deste mês não correspondem à busca e aos filtros selecionados.</p><Link className="button secondary" href={`/?month=${month}#expenses`}>Remover filtros</Link></div> : <p className="empty">Nenhuma despesa disponível nesta página.</p> : <ExpenseTable key={`${month}:${page}:${filters.query ?? ""}:${filters.categoryId ?? ""}:${filters.paymentType ?? ""}:${filters.payer ?? ""}:${filters.status ?? ""}:${filters.settlement ?? ""}`} expenses={filteredExpenses.map((expense) => ({ id: expense.id, description: expense.description, occurredOn: expense.occurredOn.toISOString(), categoryName: expense.category.name, payer: expense.payer, sharingType: expense.sharingType, status: expense.status, settlementStatus: expense.settlementStatus, paymentType: expense.paymentType, installmentNumber: expense.installmentNumber, totalInstallments: expense.installmentPlan?.totalInstallments ?? null, amount: decimalValue(expense.amount) }))} expenseListUrl={expenseListUrl} month={month} />}
+          {totalExpensePages > 1 && <nav className="pagination" aria-label="Paginação de despesas"><span>Página {page} de {totalExpensePages}</span>{page > 1 && <Link className="button secondary" href={`${buildExpenseListUrl(month, filters, page - 1)}#expenses`}>Anterior</Link>}{page < totalExpensePages && <Link className="button secondary" href={`${buildExpenseListUrl(month, filters, page + 1)}#expenses`}>Próxima</Link>}</nav>}
         </section>
       </section>
 
@@ -185,6 +196,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           }))}
         />
       </section>
+      <a className="quick-expense-action" href={params.edit ? `${buildExpenseListUrl(month, filters)}#expense-form` : "#expense-form"}>+ Nova despesa</a>
       </div>
     </main>
   );

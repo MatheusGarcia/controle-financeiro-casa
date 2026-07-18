@@ -131,7 +131,7 @@ export function ExpenseTable({ expenses, expenseListUrl, month }: { expenses: Ex
             <td data-label="Status"><span className={`status-badge ${expense.status === "PAGO" ? "success" : "warning"}`}>{expense.status === "PAGO" ? "Pago" : "Pendente"}</span></td>
             <td data-label="Divisão">{expense.sharingType === "COMPARTILHADA" ? <span className={`status-badge ${expense.settlementStatus === "DIVIDIDA" ? "success" : "warning"}`}>{expense.settlementStatus === "DIVIDIDA" ? "Já dividida" : "Pendente"}</span> : <span className="not-applicable">—</span>}</td>
             <td className="expense-amount" data-label="Valor">{currency.format(expense.amount)}</td>
-            <td className="expense-actions-cell"><div className="expense-actions"><Link aria-disabled={isPending} className="link-button" href={`${expenseListUrl}&edit=${expense.id}#expense-form`} onClick={(event) => { if (isPending) event.preventDefault(); }}>Editar</Link><DeleteExpenseControl description={expense.description} expenseId={expense.id} installmentNumber={expense.installmentNumber} month={month} totalInstallments={expense.totalInstallments} /></div></td>
+            <td className="expense-actions-cell"><div className="expense-actions"><Link aria-disabled={isPending} className="link-button" href={`${expenseListUrl}&edit=${expense.id}#expense-form`} onClick={(event) => { if (isPending) event.preventDefault(); }}>Editar</Link><DeleteExpenseControl description={expense.description} expenseId={expense.id} installmentNumber={expense.installmentNumber} month={month} returnTo={`${expenseListUrl}#expenses`} totalInstallments={expense.totalInstallments} /></div></td>
           </tr>
         ))}</tbody>
       </table>
