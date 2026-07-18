@@ -16,6 +16,8 @@ type ExpenseRow = {
   status: "PAGO" | "PENDENTE";
   settlementStatus: "DIVIDIDA" | "PENDENTE_DIVISAO";
   paymentType: "DEBITO_PIX" | "CREDITO" | "NAO_INFORMADO";
+  installmentNumber: number | null;
+  totalInstallments: number | null;
   amount: number;
 };
 
@@ -117,7 +119,7 @@ export function ExpenseTable({ expenses, expenseListUrl, month }: { expenses: Ex
         <tbody>{expenses.map((expense) => (
           <tr className={selectedIds.has(expense.id) ? "selected" : undefined} key={expense.id}>
             <td className="selection-column"><input type="checkbox" checked={selectedIds.has(expense.id)} disabled={isPending} onChange={() => toggleExpense(expense.id)} aria-label={`Selecionar ${expense.description}`} /></td>
-            <td className="expense-description">{expense.description}</td>
+            <td className="expense-description">{expense.description}{expense.installmentNumber && expense.totalInstallments ? <small className="expense-installment">Parcela {expense.installmentNumber} de {expense.totalInstallments}</small> : null}</td>
             <td className="date-column">{dateFormatter.format(new Date(expense.occurredOn))}</td>
             <td>{expense.categoryName}</td>
             <td>{expense.paymentType === "CREDITO" ? "Crédito" : expense.paymentType === "DEBITO_PIX" ? "Débito / Pix" : "—"}</td>

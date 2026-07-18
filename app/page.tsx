@@ -63,7 +63,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const [categories, recurringRules, filteredExpenses, filteredExpenseCount, editExpense] = await Promise.all([
     prisma.category.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     prisma.recurringRule.findMany({ where: { active: true }, include: { category: true }, orderBy: { description: "asc" } }),
-    prisma.expense.findMany({ where: listWhere, include: { category: true }, orderBy: [{ occurredOn: "desc" }, { createdAt: "desc" }], skip: (page - 1) * expensesPerPage, take: expensesPerPage }),
+    prisma.expense.findMany({ where: listWhere, include: { category: true, installmentPlan: { select: { totalInstallments: true } } }, orderBy: [{ occurredOn: "desc" }, { createdAt: "desc" }], skip: (page - 1) * expensesPerPage, take: expensesPerPage }),
     prisma.expense.count({ where: listWhere }),
     params.edit ? prisma.expense.findUnique({ where: { id: params.edit } }) : null,
   ]);
@@ -104,7 +104,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
             <div className="field"><label htmlFor="description">Descrição</label><input id="description" name="description" required defaultValue={editExpense?.description} placeholder="Ex.: Aluguel" /></div>
             <div className="two-columns">
               <div className="field"><label htmlFor="amount">Valor</label><input id="amount" name="amount" type="number" min="0.01" step="0.01" required defaultValue={editExpense ? decimalValue(editExpense.amount) : undefined} placeholder="0,00" /></div>
-              <div className="field"><label htmlFor="occurredOn">Data</label><input id="occurredOn" name="occurredOn" type="date" required defaultValue={editExpense ? dateInputValue(editExpense.occurredOn) : `${month}-01`} /></div>
+              <div className="field"><label htmlFor="occurredOn">Data</label><input id="occurredOn" name="occurredOn" type="date" required defaultValue={editExpense ? dateInputValue(editExpense.purchasedOn) : `${month}-01`} /></div>
             </div>
             <div className="field"><label htmlFor="categoryId">Categoria</label><select id="categoryId" name="categoryId" required defaultValue={editExpense?.categoryId}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
             <PaymentFields defaultPaymentType={editExpense?.paymentType} defaultInstallments={editExpense?.installmentNumber ? 1 : undefined} defaultMonth={editExpense ? editExpense.occurredOn.toISOString().slice(0, 7) : month} editing={Boolean(editExpense)} />
@@ -123,7 +123,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           <h2>Despesas de {new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(start)}</h2>
           <p className="note">O resumo e o acerto compartilhado são carregados no dashboard acima.</p>
           <ExpenseFiltersForm filters={filters} month={month} />
-          {filteredExpenses.length === 0 ? <p className="empty">Nenhuma despesa encontrada com estes filtros.</p> : <ExpenseTable key={`${month}:${page}:${filters.payer ?? ""}:${filters.status ?? ""}:${filters.settlement ?? ""}`} expenses={filteredExpenses.map((expense) => ({ id: expense.id, description: expense.description, occurredOn: expense.occurredOn.toISOString(), categoryName: expense.category.name, payer: expense.payer, sharingType: expense.sharingType, status: expense.status, settlementStatus: expense.settlementStatus, paymentType: expense.paymentType, amount: decimalValue(expense.amount) }))} expenseListUrl={expenseListUrl} month={month} />}
+          {filteredExpenses.length === 0 ? <p className="empty">Nenhuma despesa encontrada com estes filtros.</p> : <ExpenseTable key={`${month}:${page}:${filters.payer ?? ""}:${filters.status ?? ""}:${filters.settlement ?? ""}`} expenses={filteredExpenses.map((expense) => ({ id: expense.id, description: expense.description, occurredOn: expense.occurredOn.toISOString(), categoryName: expense.category.name, payer: expense.payer, sharingType: expense.sharingType, status: expense.status, settlementStatus: expense.settlementStatus, paymentType: expense.paymentType, installmentNumber: expense.installmentNumber, totalInstallments: expense.installmentPlan?.totalInstallments ?? null, amount: decimalValue(expense.amount) }))} expenseListUrl={expenseListUrl} month={month} />}
           {totalExpensePages > 1 && <nav className="pagination" aria-label="Paginação de despesas"><span>Página {page} de {totalExpensePages}</span>{page > 1 && <Link className="button secondary" href={`${expenseListUrl}&page=${page - 1}#expenses`}>Anterior</Link>}{page < totalExpensePages && <Link className="button secondary" href={`${expenseListUrl}&page=${page + 1}#expenses`}>Próxima</Link>}</nav>}
         </section>
       </section>

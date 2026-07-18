@@ -65,6 +65,7 @@ textarea { min-height: 74px; resize: vertical; }
 .expense-table tbody tr:hover { background: #f8fbfd; }
 .expense-table tbody tr.selected { background: #eaf6fa; }
 .expense-table .expense-description { color: #14213d; font-weight: 700; min-width: 150px; }
+.expense-installment { color: #62748d; display: block; font-size: .72rem; font-weight: 600; margin-top: 3px; }
 .expense-table .date-column { white-space: nowrap; }
 .numeric-column, .expense-table .expense-amount { text-align: right; }
 .expense-table .expense-amount { color: #14213d; font-weight: 750; white-space: nowrap; }

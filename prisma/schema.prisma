@@ -71,6 +71,7 @@ model Expense {
   id                String           @id @default(cuid())
   description       String
   amount            Decimal          @db.Decimal(12, 2)
+  purchasedOn       DateTime         @db.Date
   occurredOn        DateTime         @db.Date
   payer             Person
   sharingType       SharingType
@@ -154,8 +155,10 @@ model RecurringRule {
 model InstallmentPlan {
   id                String         @id @default(cuid())
   description       String
+  totalAmount       Decimal        @db.Decimal(12, 2)
   installmentAmount Decimal        @db.Decimal(12, 2)
   totalInstallments Int
+  purchasedOn       DateTime       @db.Date
   firstDueOn        DateTime       @db.Date
   payer             Person
   sharingType       SharingType

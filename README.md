@@ -15,11 +15,19 @@ Base técnica do aplicativo compartilhado de Matheus e Karina.
 4. Crie a estrutura do banco: `pnpm db:migrate --name init`.
 5. Inicie o app: `pnpm dev`.
 
+## Validação local
+
+- Execute os testes de domínio: `pnpm test`.
+- Verifique os tipos: `pnpm typecheck`.
+- Valide o schema: `pnpm db:validate`.
+
 ## Convenções principais
 
 - `Person` é uma enumeração fixa: `MATHEUS` e `KARINA`.
 - Valores monetários são armazenados como `Decimal(12,2)`.
-- Datas de competência não dependem da data de criação do registro.
+- `purchasedOn` registra a data real da compra ou pagamento.
+- `occurredOn` registra a competência financeira usada pelo dashboard e pelas parcelas.
+- Dados anteriores à separação das datas usam a competência existente como data histórica mais segura.
 - Despesas individuais não integram o cálculo de acerto mensal.
 
 ## Operação local

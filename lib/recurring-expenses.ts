@@ -33,6 +33,7 @@ export async function ensureRecurringExpensesForMonth(month: string) {
     data: rules.map((rule) => ({
       description: rule.description,
       amount: rule.amount,
+      purchasedOn: dueDate(month, rule.dueDay),
       occurredOn: dueDate(month, rule.dueDay),
       payer: rule.payer,
       sharingType: rule.sharingType,

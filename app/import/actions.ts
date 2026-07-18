@@ -31,6 +31,7 @@ export async function commitImportBatch(formData: FormData) {
         data: {
           description: String(formData.get(`description-${item.id}`)),
           amount: Number(formData.get(`amount-${item.id}`)),
+          purchasedOn: new Date(`${String(formData.get(`date-${item.id}`))}T12:00:00`),
           occurredOn: new Date(`${String(formData.get(`date-${item.id}`))}T12:00:00`),
           payer: (formData.get(`payer-${item.id}`) || item.payer || Person.MATHEUS) as Person,
           sharingType: item.sharingType,

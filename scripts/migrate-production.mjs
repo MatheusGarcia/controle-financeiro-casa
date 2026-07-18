@@ -1,5 +1,10 @@
 import { spawnSync } from "node:child_process";
 
+if (process.env.VERCEL_ENV !== "production") {
+  console.log("Migration automática ignorada fora do ambiente de produção.");
+  process.exit(0);
+}
+
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
