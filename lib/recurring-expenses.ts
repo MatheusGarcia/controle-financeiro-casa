@@ -27,10 +27,15 @@ export async function ensureRecurringExpensesForMonth(month: string) {
     },
   });
 
-  if (rules.length === 0) return 0;
+  const eligibleRules = rules.filter((rule) => {
+    const occurrence = dueDate(month, rule.dueDay);
+    return occurrence >= rule.startsOn && (!rule.endsOn || occurrence <= rule.endsOn);
+  });
+
+  if (eligibleRules.length === 0) return 0;
 
   const result = await observe("recurring_expense_generation", () => prisma.expense.createMany({
-    data: rules.map((rule) => ({
+    data: eligibleRules.map((rule) => ({
       description: rule.description,
       amount: rule.amount,
       purchasedOn: dueDate(month, rule.dueDay),

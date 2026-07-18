@@ -1,6 +1,6 @@
 import { ExpenseStatus, PaymentType, Person, SettlementStatus, SharingType } from "@prisma/client";
 import { describe, expect, it } from "vitest";
-import { parseExpenseForm } from "./expense-form";
+import { ExpenseFormError, parseExpenseForm } from "./expense-form";
 
 function validForm(overrides: Record<string, string> = {}) {
   const values = {
@@ -46,10 +46,24 @@ describe("parseExpenseForm", () => {
   });
 
   it("recusa uma forma de pagamento histórica em novos lançamentos", () => {
-    expect(() => parseExpenseForm(validForm({ paymentType: PaymentType.NAO_INFORMADO }))).toThrow("Forma de pagamento inválida");
+    expect(() => parseExpenseForm(validForm({ paymentType: PaymentType.NAO_INFORMADO }))).toThrow("Escolha Débito/Pix ou Crédito");
   });
 
   it("recusa datas que o JavaScript normalizaria para outro mês", () => {
-    expect(() => parseExpenseForm(validForm({ occurredOn: "2026-02-31" }))).toThrow("data inválida");
+    expect(() => parseExpenseForm(validForm({ occurredOn: "2026-02-31" }))).toThrow("data da compra é inválida");
+  });
+
+  it("identifica o campo responsável pelo erro", () => {
+    try {
+      parseExpenseForm(validForm({ amount: "0" }));
+      expect.fail("A validação deveria falhar.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExpenseFormError);
+      expect((error as ExpenseFormError).field).toBe("amount");
+    }
+  });
+
+  it("valida a quantidade de parcelas antes de gravar", () => {
+    expect(() => parseExpenseForm(validForm({ paymentType: PaymentType.CREDITO, totalInstallments: "0" }))).toThrow("1 e 120 parcelas");
   });
 });

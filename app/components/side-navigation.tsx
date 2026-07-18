@@ -7,7 +7,7 @@ const navigationItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "expense-form", label: "Nova despesa" },
   { id: "expenses", label: "Despesas" },
-  { id: "management", label: "Gestão" },
+  { id: "management", label: "Recorrências" },
 ] as const;
 
 export function SideNavigation() {

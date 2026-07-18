@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { Prisma } from "@prisma/client";
-import { createExpense, createRecurringRule, updateExpense } from "@/app/actions";
+import { undoDeleteExpense } from "@/app/actions";
 import { ensureInitialCategories } from "@/lib/categories";
 import { prisma } from "@/lib/prisma";
 import { ensureRecurringExpensesForMonth } from "@/lib/recurring-expenses";
@@ -9,21 +9,40 @@ import { SideNavigation } from "@/app/components/side-navigation";
 import { SubmitButton } from "@/app/components/submit-button";
 import { LogoutButton } from "@/app/components/logout-button";
 import { EditAnchorScroller } from "@/app/components/edit-anchor-scroller";
-import { PaymentFields } from "@/app/components/payment-fields";
+import { ExpenseForm } from "@/features/expenses/components/expense-form";
 import { ExpenseFiltersForm } from "@/features/expenses/components/expense-filters";
-import { SharingFields } from "@/features/expenses/components/sharing-fields";
 import { ExpenseTable } from "@/features/expenses/components/expense-table";
 import { expenseListUrl as buildExpenseListUrl, parseExpenseFilters } from "@/features/expenses/filters";
 import { MonthlyDashboard } from "@/features/dashboard/components/monthly-dashboard";
 import { MonthlyDashboardSkeleton, MonthlySummarySkeleton } from "@/features/dashboard/components/dashboard-skeletons";
 import { MonthlySummary } from "@/features/dashboard/components/monthly-summary";
+import { RecurringRuleManager } from "@/features/recurring/components/recurring-rule-manager";
+import { nextRecurringOccurrence, recurringRuleStatus } from "@/features/recurring/domain/recurring-rule";
 import { requireAuthorizedUser } from "@/lib/auth/server";
 
-type SearchParams = Promise<{ month?: string; edit?: string; page?: string; payer?: string; status?: string; settlement?: string }>;
+type SearchParams = Promise<{ month?: string; edit?: string; notice?: string; page?: string; payer?: string; status?: string; settlement?: string; undo?: string }>;
 
 export const dynamic = "force-dynamic";
 
 const expensesPerPage = 20;
+const noticeMessages: Record<string, string> = {
+  created: "Despesa adicionada com sucesso.",
+  "delete-error": "Não foi possível excluir a despesa. Verifique sua conexão e tente novamente.",
+  "delete-missing": "A despesa já havia sido removida ou não está mais disponível.",
+  deleted: "Despesa excluída com sucesso.",
+  restored: "Despesa restaurada com sucesso.",
+  "restore-error": "Não foi possível restaurar a despesa. A ação pode não estar mais disponível.",
+  "recurring-created": "Recorrência criada com sucesso.",
+  "recurring-deleted": "Regra excluída; as despesas existentes foram preservadas.",
+  "recurring-ended": "Recorrência encerrada a partir do mês selecionado.",
+  "recurring-error": "Não foi possível concluir a operação na recorrência. Atualize a página e tente novamente.",
+  "recurring-future-deleted": "Recorrência encerrada e lançamentos deste mês em diante removidos.",
+  "recurring-month-deleted": "Despesa recorrente do mês excluída.",
+  "recurring-paused": "Recorrência pausada. Nenhum novo lançamento será gerado.",
+  "recurring-reactivated": "Recorrência reativada com sucesso.",
+  "recurring-updated": "Regra de recorrência atualizada; o histórico foi preservado.",
+  updated: "Alterações salvas com sucesso.",
+};
 
 function currentMonth() {
   return new Date().toISOString().slice(0, 7);
@@ -59,18 +78,21 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
 
   await ensureInitialCategories();
   await ensureRecurringExpensesForMonth(month);
-  const monthWhere: Prisma.ExpenseWhereInput = { occurredOn: { gte: start, lt: end } };
+  const monthWhere: Prisma.ExpenseWhereInput = { deletedAt: null, occurredOn: { gte: start, lt: end } };
   const listWhere: Prisma.ExpenseWhereInput = { ...monthWhere, payer: filters.payer, status: filters.status, settlementStatus: filters.settlement };
   const [categories, recurringRules, filteredExpenses, filteredExpenseCount, editExpense] = await Promise.all([
     prisma.category.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-    prisma.recurringRule.findMany({ where: { active: true }, include: { category: true }, orderBy: { description: "asc" } }),
+    prisma.recurringRule.findMany({ include: { category: true, expenses: { where: { occurredOn: { gte: start } }, select: { deletedAt: true, occurredOn: true }, orderBy: { occurredOn: "asc" } } }, orderBy: { description: "asc" } }),
     prisma.expense.findMany({ where: listWhere, include: { category: true, installmentPlan: { select: { totalInstallments: true } } }, orderBy: [{ occurredOn: "desc" }, { createdAt: "desc" }], skip: (page - 1) * expensesPerPage, take: expensesPerPage }),
     prisma.expense.count({ where: listWhere }),
-    params.edit ? prisma.expense.findUnique({ where: { id: params.edit }, include: { installmentPlan: { select: { totalInstallments: true } } } }) : null,
+    params.edit ? prisma.expense.findFirst({ where: { deletedAt: null, id: params.edit }, include: { installmentPlan: { select: { totalInstallments: true } } } }) : null,
   ]);
 
   const expenseListUrl = buildExpenseListUrl(month, filters);
   const totalExpensePages = Math.max(1, Math.ceil(filteredExpenseCount / expensesPerPage));
+  const noticeMessage = params.notice ? noticeMessages[params.notice] : undefined;
+  const errorNotice = params.notice === "delete-error" || params.notice === "delete-missing" || params.notice === "restore-error" || params.notice === "recurring-error";
+  const undoAvailable = (params.notice === "deleted" || params.notice === "recurring-month-deleted") && params.undo;
 
   return (
     <main className="app-layout">
@@ -88,6 +110,17 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         </form><LogoutButton /></div>
       </header>
 
+      {noticeMessage && (
+        <div className={`operation-feedback ${errorNotice ? "error" : "success"}`} role={errorNotice ? "alert" : "status"}>
+          {noticeMessage}
+          {undoAvailable && <form action={undoDeleteExpense}>
+            <input type="hidden" name="deletionId" value={undoAvailable} />
+            <input type="hidden" name="month" value={month} />
+            <SubmitButton className="inline-action" pendingLabel="Restaurando…">Desfazer</SubmitButton>
+          </form>}
+        </div>
+      )}
+
       <Suspense fallback={<MonthlySummarySkeleton />}>
         <MonthlySummary month={month} />
       </Suspense>
@@ -100,26 +133,19 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           {editExpense && <EditAnchorScroller expenseId={editExpense.id} />}
           <h2>{editExpense ? "Editar despesa" : "Nova despesa"}</h2>
           <p className="note">Informe os dados da compra; os campos se ajustam à forma de pagamento e à natureza escolhidas.</p>
-          <form action={editExpense ? updateExpense : createExpense} key={editExpense?.id ?? "new-expense"}>
-            {editExpense && <input type="hidden" name="id" value={editExpense.id} />}
-            {editExpense?.installmentPlan && <fieldset className="mutation-scope">
-              <legend>Aplicar alterações em</legend>
-              <label><input type="radio" name="mutationScope" value="CURRENT" defaultChecked />Somente esta parcela ({editExpense.installmentNumber} de {editExpense.installmentPlan.totalInstallments})</label>
-              <label><input type="radio" name="mutationScope" value="INSTALLMENT_PLAN" />Todas as parcelas desta compra</label>
-              <small>Ao escolher todas, o valor informado será aplicado a cada parcela e o mês selecionado continuará sendo o desta parcela.</small>
-            </fieldset>}
-            <div className="field"><label htmlFor="description">Descrição</label><input id="description" name="description" required defaultValue={editExpense?.description} placeholder="Ex.: Aluguel" /></div>
-            <div className="two-columns">
-              <div className="field"><label htmlFor="amount">{editExpense?.installmentPlan ? "Valor da parcela" : "Valor"}</label><input id="amount" name="amount" type="number" min="0.01" step="0.01" required defaultValue={editExpense ? decimalValue(editExpense.amount) : undefined} placeholder="0,00" /></div>
-              <div className="field"><label htmlFor="occurredOn">Data da compra</label><input id="occurredOn" name="occurredOn" type="date" required defaultValue={editExpense ? dateInputValue(editExpense.purchasedOn) : `${month}-01`} /></div>
-            </div>
-            <div className="field"><label htmlFor="categoryId">Categoria</label><select id="categoryId" name="categoryId" required defaultValue={editExpense?.categoryId}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
-            <PaymentFields defaultPaymentType={editExpense?.paymentType} defaultInstallments={editExpense?.installmentPlan?.totalInstallments} defaultMonth={editExpense ? editExpense.occurredOn.toISOString().slice(0, 7) : month} editing={Boolean(editExpense)} installmentEditing={Boolean(editExpense?.installmentPlan)} />
-            <SharingFields defaultPayer={editExpense?.payer} defaultSettlementStatus={editExpense?.settlementStatus} defaultSharingType={editExpense?.sharingType} />
-            <div className="field"><label htmlFor="status">Status</label><select id="status" name="status" defaultValue={editExpense?.status ?? "PAGO"}><option value="PAGO">Pago</option><option value="PENDENTE">Pendente</option></select></div>
-            <div className="field"><label htmlFor="notes">Observação</label><textarea id="notes" name="notes" defaultValue={editExpense?.notes ?? undefined} placeholder="Opcional" /></div>
-            <div className="actions"><SubmitButton className="button" pendingLabel={editExpense ? "Salvando alterações…" : "Adicionando despesa…"}>{editExpense ? "Salvar alterações" : "Adicionar despesa"}</SubmitButton>{editExpense && <Link className="button secondary" href={expenseListUrl}>Cancelar</Link>}</div>
-          </form>
+          <ExpenseForm
+            categories={categories.map(({ id, name }) => ({ id, name }))}
+            expense={editExpense ? {
+              amount: decimalValue(editExpense.amount), categoryId: editExpense.categoryId, description: editExpense.description, id: editExpense.id,
+              installmentNumber: editExpense.installmentNumber, notes: editExpense.notes, occurredMonth: editExpense.occurredOn.toISOString().slice(0, 7),
+              payer: editExpense.payer, paymentType: editExpense.paymentType, purchasedOn: dateInputValue(editExpense.purchasedOn), settlementStatus: editExpense.settlementStatus,
+              sharingType: editExpense.sharingType, status: editExpense.status, totalInstallments: editExpense.installmentPlan?.totalInstallments ?? null,
+              updatedAt: editExpense.updatedAt.toISOString(),
+            } : undefined}
+            expenseListUrl={expenseListUrl}
+            key={editExpense ? `${editExpense.id}-${editExpense.updatedAt.toISOString()}` : "new-expense"}
+            month={month}
+          />
         </aside>
 
         <section className="card" id="expenses">
@@ -136,9 +162,28 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           <h2>Despesas recorrentes</h2>
           <p className="note">Cadastre compromissos recorrentes uma vez; as despesas mensais são criadas na lista automaticamente.</p>
         </div>
-        <div className="grid management-grid">
-          <details className="card"><summary>Adicionar despesa recorrente</summary><form action={createRecurringRule}><input type="hidden" name="month" value={month} /><div className="field"><label htmlFor="recurringDescription">Descrição</label><input id="recurringDescription" name="recurringDescription" required placeholder="Ex.: Aluguel" /></div><div className="two-columns"><div className="field"><label htmlFor="recurringAmount">Valor</label><input id="recurringAmount" name="recurringAmount" type="number" min="0.01" step="0.01" required /></div><div className="field"><label htmlFor="dueDay">Dia do vencimento</label><input id="dueDay" name="dueDay" type="number" min="1" max="31" required defaultValue="1" /></div></div><div className="field"><label htmlFor="recurringCategoryId">Categoria</label><select id="recurringCategoryId" name="recurringCategoryId">{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div><div className="two-columns"><div className="field"><label htmlFor="recurringPayer">Quem paga</label><select id="recurringPayer" name="recurringPayer"><option value="MATHEUS">Matheus</option><option value="KARINA">Karina</option></select></div><div className="field"><label htmlFor="recurringSharingType">Natureza</label><select id="recurringSharingType" name="recurringSharingType"><option value="COMPARTILHADA">Compartilhada</option><option value="INDIVIDUAL">Individual</option></select></div></div><div className="field"><label htmlFor="recurringPaymentType">Forma de pagamento</label><select id="recurringPaymentType" name="recurringPaymentType"><option value="DEBITO_PIX">Débito / Pix</option><option value="CREDITO">Crédito</option></select></div><div className="two-columns"><div className="field"><label htmlFor="startsOn">Inicia em</label><input id="startsOn" name="startsOn" type="date" required defaultValue={`${month}-01`} /></div><div className="field"><label htmlFor="endsOn">Termina em</label><input id="endsOn" name="endsOn" type="date" /></div></div><SubmitButton className="button" pendingLabel="Criando recorrência…">Criar recorrência</SubmitButton></form>{recurringRules.length > 0 && <p className="note list-note">Ativas: {recurringRules.map((rule) => rule.description).join(", ")}</p>}</details>
-        </div>
+        <RecurringRuleManager
+          categories={categories.map(({ id, name }) => ({ id, name }))}
+          month={month}
+          rules={recurringRules.map((rule) => ({
+            active: rule.active,
+            amount: decimalValue(rule.amount),
+            categoryId: rule.categoryId,
+            categoryName: rule.category.name,
+            description: rule.description,
+            dueDay: rule.dueDay,
+            endsOn: rule.endsOn?.toISOString().slice(0, 10) ?? null,
+            hasCurrentExpense: rule.expenses.some((expense) => !expense.deletedAt && expense.occurredOn >= start && expense.occurredOn < end),
+            id: rule.id,
+            nextOccurrence: nextRecurringOccurrence(rule, month, rule.expenses.map((expense) => expense.occurredOn))?.toISOString() ?? null,
+            payer: rule.payer,
+            paymentType: rule.paymentType,
+            sharingType: rule.sharingType,
+            startsOn: rule.startsOn.toISOString().slice(0, 10),
+            status: recurringRuleStatus(rule, month),
+            updatedAt: rule.updatedAt.toISOString(),
+          }))}
+        />
       </section>
       </div>
     </main>

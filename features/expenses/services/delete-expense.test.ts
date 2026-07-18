@@ -4,14 +4,11 @@ const database = vi.hoisted(() => {
   const transaction = {
     expense: {
       aggregate: vi.fn(),
-      delete: vi.fn(),
-      deleteMany: vi.fn(),
-      findUniqueOrThrow: vi.fn(),
+      findFirstOrThrow: vi.fn(),
+      findMany: vi.fn(),
+      updateMany: vi.fn(),
     },
-    installmentPlan: {
-      delete: vi.fn(),
-      update: vi.fn(),
-    },
+    installmentPlan: { update: vi.fn() },
   };
 
   return {
@@ -22,42 +19,57 @@ const database = vi.hoisted(() => {
 
 vi.mock("@/lib/prisma", () => ({ prisma: database.prisma }));
 
-import { deleteExpenseRecords } from "./delete-expense";
+import { deleteExpenseRecords, restoreDeletedExpenseRecords } from "./delete-expense";
 
-describe("deleteExpenseRecords", () => {
+describe("exclusão reversível de despesas", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("remove somente a parcela atual e recalcula o total restante", async () => {
-    database.transaction.expense.findUniqueOrThrow.mockResolvedValue({ installmentPlanId: "plan-1" });
-    database.transaction.expense.aggregate.mockResolvedValue({ _count: { _all: 2 }, _sum: { amount: 80 } });
+  it("oculta somente a parcela atual e recalcula o total restante", async () => {
+    database.transaction.expense.findFirstOrThrow.mockResolvedValue({ installmentPlanId: "plan-1" });
+    database.transaction.expense.updateMany.mockResolvedValue({ count: 1 });
+    database.transaction.expense.aggregate.mockResolvedValue({ _sum: { amount: 80 } });
 
-    await expect(deleteExpenseRecords("expense-2", "CURRENT")).resolves.toEqual({ deletedCount: 1 });
+    const result = await deleteExpenseRecords("expense-2", "CURRENT");
 
-    expect(database.transaction.expense.delete).toHaveBeenCalledWith({ where: { id: "expense-2" } });
+    expect(result).toEqual({ deletedCount: 1, deletionId: expect.any(String) });
+    expect(database.transaction.expense.updateMany).toHaveBeenCalledWith({
+      where: { deletedAt: null, id: "expense-2" },
+      data: { deletedAt: expect.any(Date), deletionId: expect.any(String) },
+    });
     expect(database.transaction.installmentPlan.update).toHaveBeenCalledWith({
       where: { id: "plan-1" },
       data: { totalAmount: 80 },
     });
-    expect(database.transaction.installmentPlan.delete).not.toHaveBeenCalled();
   });
 
-  it("remove todas as parcelas e depois o plano", async () => {
-    database.transaction.expense.findUniqueOrThrow.mockResolvedValue({ installmentPlanId: "plan-1" });
-    database.transaction.expense.deleteMany.mockResolvedValue({ count: 4 });
+  it("oculta todas as parcelas sem destruir o plano necessário para restauração", async () => {
+    database.transaction.expense.findFirstOrThrow.mockResolvedValue({ installmentPlanId: "plan-1" });
+    database.transaction.expense.updateMany.mockResolvedValue({ count: 4 });
+    database.transaction.expense.aggregate.mockResolvedValue({ _sum: { amount: null } });
 
-    await expect(deleteExpenseRecords("expense-2", "INSTALLMENT_PLAN")).resolves.toEqual({ deletedCount: 4 });
+    const result = await deleteExpenseRecords("expense-2", "INSTALLMENT_PLAN");
 
-    expect(database.transaction.expense.deleteMany).toHaveBeenCalledWith({ where: { installmentPlanId: "plan-1" } });
-    expect(database.transaction.installmentPlan.delete).toHaveBeenCalledWith({ where: { id: "plan-1" } });
-    expect(database.transaction.expense.delete).not.toHaveBeenCalled();
+    expect(result.deletedCount).toBe(4);
+    expect(database.transaction.expense.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { deletedAt: null, installmentPlanId: "plan-1" },
+    }));
+    expect(database.transaction.installmentPlan.update).not.toHaveBeenCalled();
   });
 
-  it("remove o plano quando a última parcela for excluída", async () => {
-    database.transaction.expense.findUniqueOrThrow.mockResolvedValue({ installmentPlanId: "plan-1" });
-    database.transaction.expense.aggregate.mockResolvedValue({ _count: { _all: 0 }, _sum: { amount: null } });
+  it("restaura todo o conjunto identificado pela mesma exclusão", async () => {
+    database.transaction.expense.findMany.mockResolvedValue([
+      { installmentPlanId: "plan-1" },
+      { installmentPlanId: "plan-1" },
+    ]);
+    database.transaction.expense.updateMany.mockResolvedValue({ count: 2 });
+    database.transaction.expense.aggregate.mockResolvedValue({ _sum: { amount: 100 } });
 
-    await deleteExpenseRecords("expense-1", "CURRENT");
+    await expect(restoreDeletedExpenseRecords("deletion-1")).resolves.toEqual({ restoredCount: 2 });
 
-    expect(database.transaction.installmentPlan.delete).toHaveBeenCalledWith({ where: { id: "plan-1" } });
+    expect(database.transaction.expense.updateMany).toHaveBeenCalledWith({
+      where: { deletedAt: { not: null }, deletionId: "deletion-1" },
+      data: { deletedAt: null, deletionId: null },
+    });
+    expect(database.transaction.installmentPlan.update).toHaveBeenCalledTimes(1);
   });
 });

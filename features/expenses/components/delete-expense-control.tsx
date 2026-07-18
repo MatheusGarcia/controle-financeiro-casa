@@ -22,7 +22,7 @@ export function DeleteExpenseControl({ description, expenseId, installmentNumber
       <section aria-labelledby={`delete-title-${expenseId}`} aria-modal="true" className="confirmation-dialog" role="dialog" onMouseDown={(event) => event.stopPropagation()}>
         <h3 id={`delete-title-${expenseId}`}>Excluir {description}?</h3>
         {isInstallment ? <>
-          <p>Esta é a parcela {installmentNumber} de {totalInstallments}. Escolha exatamente o que deseja remover.</p>
+          <p>Esta é a parcela {installmentNumber} de {totalInstallments}. Escolha exatamente o que deseja remover. Você poderá desfazer a exclusão logo após.</p>
           <div className="confirmation-options">
             <form action={deleteExpense}>
               <input type="hidden" name="id" value={expenseId} />
@@ -38,7 +38,7 @@ export function DeleteExpenseControl({ description, expenseId, installmentNumber
             </form>
           </div>
         </> : <>
-          <p>Essa ação remove a despesa definitivamente.</p>
+          <p>A despesa sairá da lista, mas poderá ser restaurada pela opção “Desfazer”.</p>
           <form action={deleteExpense} className="confirmation-options">
             <input type="hidden" name="id" value={expenseId} />
             <input type="hidden" name="month" value={month} />

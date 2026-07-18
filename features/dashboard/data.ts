@@ -35,9 +35,9 @@ const getCachedMonthlyDashboard = unstable_cache(
     const trendStart = new Date(start.getFullYear(), start.getMonth() - 5, 1, 12);
     const upcomingEnd = new Date(end.getFullYear(), end.getMonth() + 3, 1, 12);
     const [expenses, trendExpenses, upcomingExpenses] = await Promise.all([
-      prisma.expense.findMany({ where: { occurredOn: { gte: start, lt: end } }, include: { category: true } }),
-      prisma.expense.findMany({ where: { occurredOn: { gte: trendStart, lt: end } }, select: { amount: true, occurredOn: true } }),
-      prisma.expense.findMany({ where: { occurredOn: { gte: end, lt: upcomingEnd }, status: "PENDENTE" }, include: { category: true }, orderBy: { occurredOn: "asc" }, take: 6 }),
+      prisma.expense.findMany({ where: { deletedAt: null, occurredOn: { gte: start, lt: end } }, include: { category: true } }),
+      prisma.expense.findMany({ where: { deletedAt: null, occurredOn: { gte: trendStart, lt: end } }, select: { amount: true, occurredOn: true } }),
+      prisma.expense.findMany({ where: { deletedAt: null, occurredOn: { gte: end, lt: upcomingEnd }, status: "PENDENTE" }, include: { category: true }, orderBy: { occurredOn: "asc" }, take: 6 }),
     ]);
     const sum = (items: Array<{ amount: { toNumber(): number } }>) => items.reduce((total, item) => total + item.amount.toNumber(), 0);
     const shared = expenses.filter((expense) => expense.sharingType === SharingType.COMPARTILHADA);

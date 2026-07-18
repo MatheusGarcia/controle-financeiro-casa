@@ -1,5 +1,6 @@
 import { PaymentType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { ExpenseConflictError } from "../domain/expense-errors";
 import type { ExpenseInput } from "../domain/expense-form";
 import type { ExpenseMutationScope } from "../domain/expense-mutations";
 import { buildInstallmentSchedule } from "../domain/installments";
@@ -9,14 +10,16 @@ function monthAtOffset(month: string, offset: number) {
   return new Date(year, monthNumber - 1 + offset, 1, 12);
 }
 
-export async function updateExpenseRecord(id: string, input: ExpenseInput, scope: ExpenseMutationScope = "CURRENT") {
+export async function updateExpenseRecord(id: string, input: ExpenseInput, expectedUpdatedAt: Date, scope: ExpenseMutationScope = "CURRENT") {
   const competence = buildInstallmentSchedule(input.amount, 1, input.firstInstallmentMonth)[0];
 
   return prisma.$transaction(async (transaction) => {
-    const currentExpense = await transaction.expense.findUniqueOrThrow({
-      where: { id },
-      select: { installmentNumber: true, installmentPlanId: true },
+    const currentExpense = await transaction.expense.findFirstOrThrow({
+      where: { deletedAt: null, id },
+      select: { installmentNumber: true, installmentPlanId: true, updatedAt: true },
     });
+
+    if (currentExpense.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throw new ExpenseConflictError();
 
     if (currentExpense.installmentPlanId && input.paymentType !== PaymentType.CREDITO) {
       throw new Error("Uma parcela deve permanecer com a forma de pagamento Crédito.");
@@ -28,15 +31,22 @@ export async function updateExpenseRecord(id: string, input: ExpenseInput, scope
       }
 
       const installments = await transaction.expense.findMany({
-        where: { installmentPlanId: currentExpense.installmentPlanId },
+        where: { deletedAt: null, installmentPlanId: currentExpense.installmentPlanId },
         select: { id: true, installmentNumber: true },
         orderBy: { installmentNumber: "asc" },
       });
 
+      const currentInstallment = installments.find((installment) => installment.id === id);
+      if (!currentInstallment?.installmentNumber) throw new Error("A parcela atual não está mais disponível.");
+
       for (const installment of installments) {
         if (!installment.installmentNumber) throw new Error("O parcelamento possui uma parcela inválida.");
-        await transaction.expense.update({
-          where: { id: installment.id },
+        const installmentUpdate = await transaction.expense.updateMany({
+          where: {
+            deletedAt: null,
+            id: installment.id,
+            ...(installment.id === id ? { updatedAt: expectedUpdatedAt } : {}),
+          },
           data: {
             amount: input.amount,
             categoryId: input.categoryId,
@@ -51,6 +61,7 @@ export async function updateExpenseRecord(id: string, input: ExpenseInput, scope
             status: input.status,
           },
         });
+        if (installmentUpdate.count === 0) throw new ExpenseConflictError();
       }
 
       const firstDueOn = monthAtOffset(input.firstInstallmentMonth, 1 - currentExpense.installmentNumber);
@@ -69,11 +80,11 @@ export async function updateExpenseRecord(id: string, input: ExpenseInput, scope
         },
       });
 
-      return transaction.expense.findUniqueOrThrow({ where: { id } });
+      return transaction.expense.findFirstOrThrow({ where: { deletedAt: null, id } });
     }
 
-    const updatedExpense = await transaction.expense.update({
-      where: { id },
+    const updateResult = await transaction.expense.updateMany({
+      where: { deletedAt: null, id, updatedAt: expectedUpdatedAt },
       data: {
         amount: input.amount,
         categoryId: input.categoryId,
@@ -88,10 +99,12 @@ export async function updateExpenseRecord(id: string, input: ExpenseInput, scope
         status: input.status,
       },
     });
+    if (updateResult.count === 0) throw new ExpenseConflictError();
+    const updatedExpense = await transaction.expense.findFirstOrThrow({ where: { deletedAt: null, id } });
 
     if (currentExpense.installmentPlanId) {
       const installments = await transaction.expense.aggregate({
-        where: { installmentPlanId: currentExpense.installmentPlanId },
+        where: { deletedAt: null, installmentPlanId: currentExpense.installmentPlanId },
         _sum: { amount: true },
       });
 
