@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { bulkUpdateExpenses, deleteExpense } from "@/app/actions";
-import { SubmitButton } from "@/app/components/submit-button";
+import { bulkUpdateExpenses } from "@/app/actions";
+import { DeleteExpenseControl } from "@/features/expenses/components/delete-expense-control";
 
 type ExpenseRow = {
   id: string;
@@ -128,7 +128,7 @@ export function ExpenseTable({ expenses, expenseListUrl, month }: { expenses: Ex
             <td><span className={`status-badge ${expense.status === "PAGO" ? "success" : "warning"}`}>{expense.status === "PAGO" ? "Pago" : "Pendente"}</span></td>
             <td>{expense.sharingType === "COMPARTILHADA" ? <span className={`status-badge ${expense.settlementStatus === "DIVIDIDA" ? "success" : "warning"}`}>{expense.settlementStatus === "DIVIDIDA" ? "Já dividida" : "Pendente"}</span> : <span className="not-applicable">—</span>}</td>
             <td className="expense-amount">{currency.format(expense.amount)}</td>
-            <td><div className="expense-actions"><Link aria-disabled={isPending} className="link-button" href={`${expenseListUrl}&edit=${expense.id}#expense-form`} onClick={(event) => { if (isPending) event.preventDefault(); }}>Editar</Link><form action={deleteExpense}><input type="hidden" name="id" value={expense.id} /><input type="hidden" name="month" value={month} /><SubmitButton className="button danger" disabled={isPending} pendingLabel="Excluindo…">Excluir</SubmitButton></form></div></td>
+            <td><div className="expense-actions"><Link aria-disabled={isPending} className="link-button" href={`${expenseListUrl}&edit=${expense.id}#expense-form`} onClick={(event) => { if (isPending) event.preventDefault(); }}>Editar</Link><DeleteExpenseControl description={expense.description} expenseId={expense.id} installmentNumber={expense.installmentNumber} month={month} totalInstallments={expense.totalInstallments} /></div></td>
           </tr>
         ))}</tbody>
       </table>

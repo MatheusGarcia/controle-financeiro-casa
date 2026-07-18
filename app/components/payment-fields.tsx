@@ -7,16 +7,18 @@ type Props = {
   defaultInstallments?: number;
   defaultMonth: string;
   editing?: boolean;
+  installmentEditing?: boolean;
 };
 
-export function PaymentFields({ defaultPaymentType = "DEBITO_PIX", defaultInstallments = 1, defaultMonth, editing = false }: Props) {
+export function PaymentFields({ defaultPaymentType = "DEBITO_PIX", defaultInstallments = 1, defaultMonth, editing = false, installmentEditing = false }: Props) {
   const initialType = defaultPaymentType === "NAO_INFORMADO" ? "DEBITO_PIX" : defaultPaymentType;
   const [paymentType, setPaymentType] = useState(initialType);
 
   return <>
     <div className="field">
       <label htmlFor="paymentType">Forma de pagamento</label>
-      <select id="paymentType" name="paymentType" value={paymentType} onChange={(event) => setPaymentType(event.target.value as "DEBITO_PIX" | "CREDITO")}>
+      {installmentEditing && <input type="hidden" name="paymentType" value="CREDITO" />}
+      <select id="paymentType" name={installmentEditing ? undefined : "paymentType"} value={paymentType} disabled={installmentEditing} onChange={(event) => setPaymentType(event.target.value as "DEBITO_PIX" | "CREDITO")}>
         <option value="DEBITO_PIX">Débito / Pix</option>
         <option value="CREDITO">Crédito</option>
       </select>

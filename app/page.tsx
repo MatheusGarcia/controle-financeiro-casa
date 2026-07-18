@@ -65,7 +65,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     prisma.recurringRule.findMany({ where: { active: true }, include: { category: true }, orderBy: { description: "asc" } }),
     prisma.expense.findMany({ where: listWhere, include: { category: true, installmentPlan: { select: { totalInstallments: true } } }, orderBy: [{ occurredOn: "desc" }, { createdAt: "desc" }], skip: (page - 1) * expensesPerPage, take: expensesPerPage }),
     prisma.expense.count({ where: listWhere }),
-    params.edit ? prisma.expense.findUnique({ where: { id: params.edit } }) : null,
+    params.edit ? prisma.expense.findUnique({ where: { id: params.edit }, include: { installmentPlan: { select: { totalInstallments: true } } } }) : null,
   ]);
 
   const expenseListUrl = buildExpenseListUrl(month, filters);
@@ -99,15 +99,21 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           {editExpense && <EditAnchorScroller expenseId={editExpense.id} />}
           <h2>{editExpense ? "Editar despesa" : "Nova despesa"}</h2>
           <p className="note">Marque “Já dividida” quando a parte de quem não pagou a conta já tiver sido repassada.</p>
-          <form action={editExpense ? updateExpense : createExpense}>
+          <form action={editExpense ? updateExpense : createExpense} key={editExpense?.id ?? "new-expense"}>
             {editExpense && <input type="hidden" name="id" value={editExpense.id} />}
+            {editExpense?.installmentPlan && <fieldset className="mutation-scope">
+              <legend>Aplicar alterações em</legend>
+              <label><input type="radio" name="mutationScope" value="CURRENT" defaultChecked />Somente esta parcela ({editExpense.installmentNumber} de {editExpense.installmentPlan.totalInstallments})</label>
+              <label><input type="radio" name="mutationScope" value="INSTALLMENT_PLAN" />Todas as parcelas desta compra</label>
+              <small>Ao escolher todas, o valor informado será aplicado a cada parcela e o mês selecionado continuará sendo o desta parcela.</small>
+            </fieldset>}
             <div className="field"><label htmlFor="description">Descrição</label><input id="description" name="description" required defaultValue={editExpense?.description} placeholder="Ex.: Aluguel" /></div>
             <div className="two-columns">
-              <div className="field"><label htmlFor="amount">Valor</label><input id="amount" name="amount" type="number" min="0.01" step="0.01" required defaultValue={editExpense ? decimalValue(editExpense.amount) : undefined} placeholder="0,00" /></div>
-              <div className="field"><label htmlFor="occurredOn">Data</label><input id="occurredOn" name="occurredOn" type="date" required defaultValue={editExpense ? dateInputValue(editExpense.purchasedOn) : `${month}-01`} /></div>
+              <div className="field"><label htmlFor="amount">{editExpense?.installmentPlan ? "Valor da parcela" : "Valor"}</label><input id="amount" name="amount" type="number" min="0.01" step="0.01" required defaultValue={editExpense ? decimalValue(editExpense.amount) : undefined} placeholder="0,00" /></div>
+              <div className="field"><label htmlFor="occurredOn">Data da compra</label><input id="occurredOn" name="occurredOn" type="date" required defaultValue={editExpense ? dateInputValue(editExpense.purchasedOn) : `${month}-01`} /></div>
             </div>
             <div className="field"><label htmlFor="categoryId">Categoria</label><select id="categoryId" name="categoryId" required defaultValue={editExpense?.categoryId}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
-            <PaymentFields defaultPaymentType={editExpense?.paymentType} defaultInstallments={editExpense?.installmentNumber ? 1 : undefined} defaultMonth={editExpense ? editExpense.occurredOn.toISOString().slice(0, 7) : month} editing={Boolean(editExpense)} />
+            <PaymentFields defaultPaymentType={editExpense?.paymentType} defaultInstallments={editExpense?.installmentPlan?.totalInstallments} defaultMonth={editExpense ? editExpense.occurredOn.toISOString().slice(0, 7) : month} editing={Boolean(editExpense)} installmentEditing={Boolean(editExpense?.installmentPlan)} />
             <div className="two-columns">
               <div className="field"><label htmlFor="payer">Quem pagou</label><select id="payer" name="payer" defaultValue={editExpense?.payer ?? "MATHEUS"}><option value="MATHEUS">Matheus</option><option value="KARINA">Karina</option></select></div>
               <div className="field"><label htmlFor="sharingType">Natureza</label><select id="sharingType" name="sharingType" defaultValue={editExpense?.sharingType ?? "COMPARTILHADA"}><option value="COMPARTILHADA">Compartilhada</option><option value="INDIVIDUAL">Individual</option></select></div>
