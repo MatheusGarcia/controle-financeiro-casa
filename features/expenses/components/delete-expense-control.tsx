@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { deleteExpense } from "@/app/actions";
+import { AccessibleModal } from "@/app/components/accessible-modal";
 import { SubmitButton } from "@/app/components/submit-button";
 
 type Props = {
@@ -19,11 +20,10 @@ export function DeleteExpenseControl({ description, expenseId, installmentNumber
 
   return <>
     <button className="button danger" type="button" onClick={() => setIsOpen(true)}>Excluir</button>
-    {isOpen && <div className="confirmation-backdrop" role="presentation" onMouseDown={() => setIsOpen(false)}>
-      <section aria-labelledby={`delete-title-${expenseId}`} aria-modal="true" className="confirmation-dialog" role="dialog" onMouseDown={(event) => event.stopPropagation()}>
+    {isOpen && <AccessibleModal descriptionId={`delete-description-${expenseId}`} labelId={`delete-title-${expenseId}`} onClose={() => setIsOpen(false)}>
         <h3 id={`delete-title-${expenseId}`}>Excluir {description}?</h3>
         {isInstallment ? <>
-          <p>Esta é a parcela {installmentNumber} de {totalInstallments}. Escolha exatamente o que deseja remover. Você poderá desfazer a exclusão logo após.</p>
+          <p id={`delete-description-${expenseId}`}>Esta é a parcela {installmentNumber} de {totalInstallments}. Escolha exatamente o que deseja remover. Você poderá desfazer a exclusão logo após.</p>
           <div className="confirmation-options">
             <form action={deleteExpense}>
               <input type="hidden" name="id" value={expenseId} />
@@ -41,7 +41,7 @@ export function DeleteExpenseControl({ description, expenseId, installmentNumber
             </form>
           </div>
         </> : <>
-          <p>A despesa sairá da lista, mas poderá ser restaurada pela opção “Desfazer”.</p>
+          <p id={`delete-description-${expenseId}`}>A despesa sairá da lista, mas poderá ser restaurada pela opção “Desfazer”.</p>
           <form action={deleteExpense} className="confirmation-options">
             <input type="hidden" name="id" value={expenseId} />
             <input type="hidden" name="month" value={month} />
@@ -50,8 +50,7 @@ export function DeleteExpenseControl({ description, expenseId, installmentNumber
             <SubmitButton className="button danger danger-filled" pendingLabel="Excluindo…">Confirmar exclusão</SubmitButton>
           </form>
         </>}
-        <button className="button secondary" type="button" autoFocus onClick={() => setIsOpen(false)}>Cancelar</button>
-      </section>
-    </div>}
+        <button className="button secondary" data-initial-focus type="button" onClick={() => setIsOpen(false)}>Cancelar</button>
+    </AccessibleModal>}
   </>;
 }

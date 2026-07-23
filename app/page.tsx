@@ -121,7 +121,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       </header>
 
       {noticeMessage && (
-        <div className={`operation-feedback ${errorNotice ? "error" : "success"}`} role={errorNotice ? "alert" : "status"}>
+        <div aria-atomic="true" aria-live={errorNotice ? "assertive" : "polite"} className={`operation-feedback ${errorNotice ? "error" : "success"}`} role={errorNotice ? "alert" : "status"}>
           {noticeMessage}
           {undoAvailable && <form action={undoDeleteExpense}>
             <input type="hidden" name="deletionId" value={undoAvailable} />

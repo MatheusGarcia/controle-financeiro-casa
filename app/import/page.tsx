@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { SubmitButton } from "@/app/components/submit-button";
 import { requireAuthorizedUser } from "@/lib/auth/server";
-import { parseImportWorkbook } from "./actions";
+import { ImportUploadForm } from "./import-upload-form";
 
 export default async function ImportPage() {
   await requireAuthorizedUser();
-  return <main className="shell"><Link className="back-link" href="/">← Voltar</Link><p className="eyebrow">Importação assistida</p><h1>Trazer dados da planilha</h1><p className="import-intro">Envie a planilha original. Os lançamentos reconhecidos serão exibidos para conferência antes de serem gravados.</p><section className="card import-upload-card"><form action={parseImportWorkbook} className="import-upload-form"><input name="workbook" type="file" accept=".xlsx" required /><SubmitButton className="button" pendingLabel="Lendo planilha…">Ler planilha e revisar</SubmitButton></form></section></main>;
+  return <main className="shell"><Link className="back-link" href="/">← Voltar ao controle da casa</Link><p className="eyebrow">Importação assistida</p><h1>Trazer dados da planilha</h1><p className="import-intro">Importe lançamentos do modelo original com uma etapa obrigatória de revisão. Nada será incluído nas despesas sem sua confirmação.</p><ol className="import-steps" aria-label="Etapas da importação"><li><strong>Selecione</strong><span>Envie uma planilha .xlsx.</span></li><li><strong>Confira</strong><span>Revise descrições, valores e categorias.</span></li><li><strong>Confirme</strong><span>Importe somente os itens escolhidos.</span></li></ol><section aria-labelledby="import-upload-title" className="card import-upload-card"><h2 id="import-upload-title">Selecionar planilha</h2><ImportUploadForm /></section></main>;
 }

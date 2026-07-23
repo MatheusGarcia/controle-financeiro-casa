@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { deleteRecurringRuleAction, endRecurringRuleAction, toggleRecurringRuleAction } from "@/app/actions";
+import { AccessibleModal } from "@/app/components/accessible-modal";
 import { SubmitButton } from "@/app/components/submit-button";
 import { RecurringRuleForm, type RecurringRuleView } from "./recurring-rule-form";
 
@@ -23,6 +24,7 @@ function dateLabel(value: string | null) {
 }
 
 export function RecurringRuleManager({ categories, month, rules }: Props) {
+  const createDetailsRef = useRef<HTMLDetailsElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [endingId, setEndingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -30,8 +32,8 @@ export function RecurringRuleManager({ categories, month, rules }: Props) {
   const endingRule = rules.find((rule) => rule.id === endingId);
 
   return <div className="recurring-manager">
-    <details className="card recurring-create"><summary>Adicionar despesa recorrente</summary><RecurringRuleForm categories={categories} month={month} /></details>
-    {rules.length === 0 ? <div className="card recurring-empty"><h3>Nenhuma recorrência cadastrada</h3><p>Use “Adicionar despesa recorrente” para automatizar aluguel, assinaturas e outros compromissos mensais.</p></div> : <div className="recurring-list">
+    <details className="card recurring-create" id="recurring-create" ref={createDetailsRef}><summary>Adicionar despesa recorrente</summary><RecurringRuleForm categories={categories} month={month} /></details>
+    {rules.length === 0 ? <div className="card recurring-empty"><h3>Nenhuma recorrência cadastrada</h3><p>Automatize aluguel, assinaturas e outros compromissos mensais.</p><button className="button" type="button" onClick={() => { if (createDetailsRef.current) { createDetailsRef.current.open = true; createDetailsRef.current.scrollIntoView({ behavior: "smooth", block: "start" }); requestAnimationFrame(() => createDetailsRef.current?.querySelector<HTMLInputElement>('[name="description"]')?.focus({ preventScroll: true })); } }}>Adicionar primeira recorrência</button></div> : <div className="recurring-list">
       {rules.map((rule) => <article className="card recurring-card" key={rule.id}>
         {editingId === rule.id ? <><div className="recurring-card-heading"><div><span className={`status-badge ${rule.status.toLowerCase()}`}>{statusLabels[rule.status]}</span><h3>Editar {rule.description}</h3></div></div><RecurringRuleForm categories={categories} month={month} onCancel={() => setEditingId(null)} rule={rule} /></> : <>
           <div className="recurring-card-heading"><div><span className={`status-badge ${rule.status.toLowerCase()}`}>{statusLabels[rule.status]}</span><h3>{rule.description}</h3><p>{rule.categoryName} · vence no dia {rule.dueDay}</p></div><strong>{rule.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></div>
@@ -40,11 +42,11 @@ export function RecurringRuleManager({ categories, month, rules }: Props) {
         </>}
       </article>)}
     </div>}
-    {endingRule && <div className="confirmation-backdrop" role="presentation" onMouseDown={() => setEndingId(null)}><section aria-labelledby="end-recurring-title" aria-modal="true" className="confirmation-dialog" role="dialog" onMouseDown={(event) => event.stopPropagation()}><h3 id="end-recurring-title">Encerrar {endingRule.description}?</h3><p>A regra deixará de gerar despesas a partir do mês selecionado. O histórico anterior será preservado.</p><form action={endRecurringRuleAction} className="confirmation-options"><HiddenRuleFields month={month} rule={endingRule} /><SubmitButton className="button danger danger-filled" pendingLabel="Encerrando…">Encerrar a partir deste mês</SubmitButton></form><button autoFocus className="button secondary" type="button" onClick={() => setEndingId(null)}>Cancelar</button></section></div>}
-    {deletingRule && <div className="confirmation-backdrop" role="presentation" onMouseDown={() => setDeletingId(null)}><section aria-labelledby="delete-recurring-title" aria-modal="true" className="confirmation-dialog recurring-delete-dialog" role="dialog" onMouseDown={(event) => event.stopPropagation()}><h3 id="delete-recurring-title">O que deseja excluir de {deletingRule.description}?</h3><p>Escolha o alcance com atenção. As despesas de meses anteriores nunca serão alteradas.</p><div className="recurring-delete-options">
+    {endingRule && <AccessibleModal descriptionId="end-recurring-description" labelId="end-recurring-title" onClose={() => setEndingId(null)}><h3 id="end-recurring-title">Encerrar {endingRule.description}?</h3><p id="end-recurring-description">A regra deixará de gerar despesas a partir do mês selecionado. O histórico anterior será preservado.</p><form action={endRecurringRuleAction} className="confirmation-options"><HiddenRuleFields month={month} rule={endingRule} /><SubmitButton className="button danger danger-filled" pendingLabel="Encerrando…">Encerrar a partir deste mês</SubmitButton></form><button className="button secondary" data-initial-focus type="button" onClick={() => setEndingId(null)}>Cancelar</button></AccessibleModal>}
+    {deletingRule && <AccessibleModal className="recurring-delete-dialog" descriptionId="delete-recurring-description" labelId="delete-recurring-title" onClose={() => setDeletingId(null)}><h3 id="delete-recurring-title">O que deseja excluir de {deletingRule.description}?</h3><p id="delete-recurring-description">Escolha o alcance com atenção. As despesas de meses anteriores nunca serão alteradas.</p><div className="recurring-delete-options">
       <form action={deleteRecurringRuleAction}><HiddenRuleFields month={month} rule={deletingRule} /><input type="hidden" name="scope" value="CURRENT_MONTH" /><SubmitButton className="button secondary" disabled={!deletingRule.hasCurrentExpense} pendingLabel="Excluindo mês…">Somente a despesa deste mês</SubmitButton>{!deletingRule.hasCurrentExpense && <small>Nenhuma despesa desta regra foi gerada no mês selecionado.</small>}</form>
       <form action={deleteRecurringRuleAction}><HiddenRuleFields month={month} rule={deletingRule} /><input type="hidden" name="scope" value="FROM_CURRENT" /><SubmitButton className="button danger" pendingLabel="Encerrando recorrência…">Este mês e os próximos</SubmitButton><small>Encerra a regra e remove lançamentos já gerados deste mês em diante.</small></form>
       <form action={deleteRecurringRuleAction}><HiddenRuleFields month={month} rule={deletingRule} /><input type="hidden" name="scope" value="RULE_ONLY" /><SubmitButton className="button danger danger-filled" pendingLabel="Excluindo regra…">Somente a regra</SubmitButton><small>Apaga a automação, mas preserva todas as despesas existentes.</small></form>
-    </div><button autoFocus className="button secondary" type="button" onClick={() => setDeletingId(null)}>Cancelar</button></section></div>}
+    </div><button className="button secondary" data-initial-focus type="button" onClick={() => setDeletingId(null)}>Cancelar</button></AccessibleModal>}
   </div>;
 }

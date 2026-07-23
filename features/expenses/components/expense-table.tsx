@@ -113,7 +113,7 @@ export function ExpenseTable({ expenses, expenseListUrl, month }: { expenses: Ex
       {bulkSettlementStatus && selectedIndividualCount > 0 && <p className="bulk-selection-note" id="bulk-settlement-note">A Divisão será ignorada em {selectedIndividualCount} {selectedIndividualCount === 1 ? "despesa individual" : "despesas individuais"}.</p>}
       {isConfirming && <div className="bulk-confirmation" role="alert"><p><strong>Confirmar atualização?</strong> Serão alteradas {selectedIds.size} {selectedIds.size === 1 ? "despesa" : "despesas"}.{bulkStatus ? ` Status: ${bulkStatus === "PAGO" ? "Pago" : "Pendente"}.` : ""}{bulkSettlementStatus ? ` Divisão: ${bulkSettlementStatus === "DIVIDIDA" ? "Já dividida" : "Pendente de dividir"}.` : ""}</p><div className="bulk-confirmation-actions"><button className="button" type="button" autoFocus onClick={applyBulkUpdate}>Confirmar</button><button className="button secondary" type="button" onClick={() => setIsConfirming(false)}>Voltar</button></div></div>}
     </div>}
-    {feedback && <p className={`bulk-feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>{feedback.message}</p>}
+    {feedback && <p aria-atomic="true" aria-live={feedback.type === "error" ? "assertive" : "polite"} className={`bulk-feedback ${feedback.type}`} role={feedback.type === "error" ? "alert" : "status"}>{feedback.message}</p>}
     <label className="mobile-select-all"><input ref={mobileSelectAllRef} type="checkbox" checked={allSelected} disabled={isPending} onChange={toggleAll} />Selecionar todas as despesas</label>
     <div className="expense-table-wrapper" aria-busy={isPending} ref={tableWrapperRef}>
       <table className="expense-table">
